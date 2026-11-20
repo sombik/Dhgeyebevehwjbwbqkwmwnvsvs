@@ -1,0 +1,2684 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Игра</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; height: 100dvh; overflow: hidden; }
+  body { font-family: 'Courier New', Courier, monospace; background: #0d0d0d; color: #e5e5e5; display: flex; flex-direction: column; user-select: none; position: relative; }
+  
+  .gem-sprite {
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+  display: block;
+}
+
+  
+  /* ===== Верхняя панель ===== */
+  .topbar { display: flex; justify-content: space-between; align-items: center; padding: 10px 10px; border-bottom: 1px solid #2a2a2a; z-index: 100; background: #0d0d0d; flex-shrink: 0; position: relative; overflow: visible; }
+  .dust-display { display: flex; align-items: center; gap: 10px; font-size: 16px; font-weight: 700; letter-spacing: 2px; color: #38bdf8; text-shadow: 0 0 10px rgba(56, 189, 248, 0.4); }
+  .dust-display img { width: 30px; height: 30px; object-fit: contain; image-rendering: pixelated; }
+  
+  .menu-toggle { background: transparent; color: #e5e5e5; border: 1px solid #3a3a3a; padding: 8px 16px; border-radius: 6px; font-size: 18px; letter-spacing: 2px; cursor: pointer; transition: background 0.2s; }
+  .menu-toggle:hover { background: #1a1a1a; }
+
+  /* Исправлен z-index меню, чтобы кнопки не уходили за фон */
+  .dropdown-menu { position: absolute; top: 60px; right: 16px; background: #141414; border: 1px solid #3a3a3a; border-radius: 6px; display: none; flex-direction: column; min-width: 160px; z-index: 5; box-shadow: 0 4px 12px rgba(0,0,0,0.5); }
+  .dropdown-menu.open { display: flex; }
+  .dropdown-menu button { background: transparent; color: #e5e5e5; border: none; border-bottom: 1px solid #2a2a2a; padding: 14px 16px; font-family: inherit; font-size: 12px; letter-spacing: 2px; text-transform: uppercase; text-align: left; cursor: pointer; transition: background 0.2s; }
+  .dropdown-menu button:last-child { border-bottom: none; }
+  .dropdown-menu button:hover { background: #1a1a1a; }
+  
+  /* ===== Сцена ===== */
+  .stage { 
+  flex: 1; 
+  min-height: 0; 
+  display: flex; 
+  align-items: center; 
+  justify-content: center; 
+  position: relative; 
+  overflow: hidden; 
+  
+  /* НОВОЕ: Добавляем фон */
+  background-image: url('textures/background.png');
+  background-size: cover;       /* Растягиваем на весь экран */
+  background-position: center;  /* Центрируем */
+  background-repeat: no-repeat; /* Без повторов */
+}
+  
+  @keyframes floatCrystal {
+    0% { transform: translateY(0px); }
+    50% { transform: translateY(-15px); }
+    100% { transform: translateY(0px); }
+  }
+
+#drop-message {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  padding: 4px 8px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.55);
+  color: white;
+  font-size: 12px;
+  line-height: 1.2;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+#drop-message.visible {
+  opacity: 1;
+}
+
+
+  #crystalDisplay { 
+    width: 180px; height: 180px; display: flex; align-items: center; justify-content: center; 
+    opacity: 0; transition: opacity 0.35s ease-in-out; 
+    position: relative; z-index: 2; 
+    filter: grayscale(0.3) drop-shadow(0 0 20px rgba(255,255,255,0.5)); 
+  }
+  #crystalDisplay.show { opacity: 1; animation: floatCrystal 3s ease-in-out infinite; }
+  #crystalDisplay img { width: 100%; height: 100%; object-fit: contain; image-rendering: pixelated; image-rendering: crisp-edges; }
+  #crystalDisplay .emoji-fallback { font-size: 160px; line-height: 1; }
+  
+  #rarityLabel { position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%); font-size: 13px; letter-spacing: 4px; text-transform: uppercase; opacity: 0; transition: opacity 0.4s; color: #1; z-index: 2; text-align: center; width: 100%; }
+  #rarityLabel.show { opacity: 1; }
+  
+  /* ===== Кнопка ===== */
+  .bottom-bar { padding: 14px 16px 18px; display: flex; justify-content: center; z-index: 10; background: #0d0d0d; border-top: 1px solid #0a0a0a; flex-shrink: 0; position: relative; height: 100px; }
+  
+  #digBtn { width: 100%; max-width: 400px; height: 58px; background: #e0e0e0; color: #0d0d0d; border: none; border-radius: 6px; font-size: 14px; letter-spacing: 4px; text-transform: uppercase; font-weight: 700; cursor: pointer; transition: background 0.15s, transform 0.1s; position: relative; overflow: hidden; font-family: inherit; z-index: 20; margin-top: auto; }
+  #digBtn:hover:not(:disabled) { background: #fff; }
+  #digBtn:active:not(:disabled) { transform: scale(0.98); }
+  #digBtn:disabled { background: #333; color: #666; cursor: not-allowed; }
+  #cdBar { position: absolute; left: 0; bottom: 0; height: 3px; background: #666; width: 0%; transition: width 0.05s linear; z-index: 30; }
+
+  /* ===== ОБЩИЕ СТИЛИ ДЛЯ СПЯЩИХ ===== */
+  .sleeping-character {
+    position: absolute;
+    bottom: 48px; /* Одинаковая высота */
+    width: 160px; /* Одинаковый размер */
+    height: 100px;
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: bottom center;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+    pointer-events: none;
+    z-index: 50;
+    opacity: 0; 
+    transition: opacity 0.5s;
+  }
+  .sleeping-character.show { opacity: 1; }
+
+  /* Сапфира (Слева) */
+  #sapphiraSleeping {
+    left: 5%;
+    background-image: url('textures/sapphira_sleep.png');
+    filter: drop-shadow(0 0 10px rgba(56, 189, 248, 0.5));
+  }
+
+  /* Рубина (Справа) */
+  #rubinaSleeping {
+    right: 5%;
+    background-image: url('textures/rubina_sleep.png');
+    filter: drop-shadow(0 0 10px rgba(239, 68, 68, 0.5));
+  }
+
+  /* Z-шки */
+  .zzz { position: absolute; font-family: inherit; font-size: 18px; font-weight: 700; pointer-events: none; animation: floatZ 2s ease-in-out infinite; }
+  #sapphiraSleeping .zzz { color: #38bdf8; text-shadow: 0 0 5px rgba(56, 189, 248, 0.8); }
+  #rubinaSleeping .zzz { color: #ef4444; text-shadow: 0 0 5px rgba(239, 68, 68, 0.8); }
+  @keyframes floatZ { 0% { transform: translateY(0) scale(1); opacity: 0; } 20% { opacity: 1; } 100% { transform: translateY(-30px) scale(1.2); opacity: 0; } }
+
+  /* ===== Оверлеи ===== */
+  .overlay { position: fixed; inset: 0; background: #0d0d0d; z-index: 1000; display: none; flex-direction: column; padding: 16px; }
+  .overlay.open { display: flex; }
+  .overlay-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-bottom: 14px; border-bottom: 1px solid #2a2a2a; }
+  .overlay-header h2 { font-size: 14px; letter-spacing: 3px; text-transform: uppercase; color: #a3a3a3; font-weight: 600; }
+  .btn-close { background: transparent; color: #e5e5e5; border: 1px solid #3a3a3a; padding: 8px 16px; border-radius: 6px; font-size: 12px; letter-spacing: 2px; text-transform: uppercase; cursor: pointer; font-family: inherit; }
+  .btn-close:hover { background: #1a1a1a; }
+
+  /* ===== Инвентарь и Крафт ===== */
+  .inv-tabs { display: flex; gap: 8px; overflow-x: auto; margin-bottom: 15px; padding-bottom: 5px; }
+  .inv-tab { background: transparent; color: #888; border: 1px solid #2a2a2a; padding: 8px 14px; border-radius: 6px; font-size: 12px; font-weight: 700; cursor: pointer; white-space: nowrap; transition: 0.2s; font-family: inherit; }
+  .inv-tab.active { border-color: #e5e5e5; color: #e5e5e5; background: #1a1a1a; }
+  
+  .inv-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; max-width: 500px; margin: 0 auto; width: 100%; overflow-y: auto; }
+  .inv-item { background: #141414; border: 1px solid #2a2a2a; border-radius: 6px; padding: 12px; display: flex; align-items: center; gap: 12px; }
+  .inv-item.empty { opacity: 0.35; }
+  .inv-item .icon { width: 42px; height: 42px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; border-radius: 4px; background: #0a0a0a; filter: grayscale(0.4); }
+  .inv-item .icon img { width: 100%; height: 100%; object-fit: contain; image-rendering: pixelated; image-rendering: crisp-edges; }
+  .inv-item .icon .emoji-fallback { font-size: 24px; }
+  .inv-item .info { flex: 1; }
+  .inv-item .name { font-size: 11px; letter-spacing: 2px; text-transform: uppercase; color: #888; }
+  .inv-item .count { font-size: 20px; font-weight: 600; color: #e5e5e5; margin-top: 2px; }
+
+  .craft-list { max-width: 500px; margin: 0 auto; width: 100%; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
+  .craft-card { background: #141414; border: 1px solid #2a2a2a; border-radius: 6px; padding: 16px; display: flex; justify-content: space-between; align-items: center; }
+  .craft-info { flex: 1; padding-right: 15px; display: flex; align-items: center; gap: 12px; }
+  .craft-icon { width: 40px; height: 40px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; background: #0a0a0a; border-radius: 4px; font-size: 24px; }
+  .craft-icon img { width: 100%; height: 100%; object-fit: contain; image-rendering: pixelated; }
+  .craft-name { font-size: 15px; font-weight: 700; color: #fff; }
+  .craft-buy-btn { background: transparent; color: #e5e5e5; border: 1px solid #555; padding: 10px 14px; border-radius: 6px; font-size: 12px; font-weight: 700; cursor: pointer; transition: 0.2s; white-space: nowrap; display: flex; flex-direction: column; align-items: center; gap: 4px; font-family: inherit; }
+  .craft-buy-btn:hover:not(:disabled) { background: #333; }
+  .craft-buy-btn:disabled { border-color: #2a2a2a; color: #555; cursor: not-allowed; }
+
+  /* ===== КЕЙСЫ ===== */
+  .case-card { background: #141414; border: 1px solid #2a2a2a; border-radius: 6px; padding: 16px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; }
+  .case-card:hover { border-color: #fbbf24; }
+  .case-info { flex: 1; display: flex; align-items: center; gap: 12px; }
+  .case-icon { width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; font-size: 28px; background: #0a0a0a; border-radius: 4px; }
+  .case-icon img { width: 100%; height: 100%; object-fit: contain; image-rendering: pixelated; image-rendering: crisp-edges; }
+  .case-text { flex: 1; }
+  .case-name { font-size: 15px; font-weight: 700; color: #fbbf24; }
+  .case-cost { font-size: 11px; color: #38bdf8; margin-top: 4px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .case-cost img { width: 14px; height: 14px; object-fit: contain; image-rendering: pixelated; }
+  
+  .case-actions { display: flex; align-items: center; gap: 10px; }
+  .case-info-btn { background: transparent; color: #888; border: 1px solid #555; border-radius: 6px; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; cursor: pointer; font-family: inherit; font-size: 14px; }
+  .case-info-btn:hover { color: #fff; border-color: #fff; }
+  .case-buy-btn { background: transparent; color: #fbbf24; border: 1px solid #fbbf24; padding: 8px 14px; border-radius: 6px; font-size: 11px; font-weight: 700; cursor: pointer; transition: 0.2s; font-family: inherit; }
+  .case-buy-btn:hover:not(:disabled) { background: #fbbf24; color: #0d0d0d; }
+  .case-buy-btn:disabled { border-color: #2a2a2a; color: #555; cursor: not-allowed; }
+
+  /* ===== МАГАЗИН РУБИНЫ ===== */
+  .shop-container { display: flex; gap: 1000px; max-width: -20px; margin: 0 auto; width: 100%; flex: 1; position: relative; }
+  .shop-items { flex: 1; display: grid; grid-template-columns: repeat(2, 1fr); grid-auto-rows: max-content; gap: 8px; align-content: start; padding-bottom: 0px; z-index: 10; max-width: 25px; }
+  .shop-item { background: #141414; border: 1px solid #2a2a2a; border-radius: 6px; padding: 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 95px; }
+  .shop-item:hover:not(.sold) { border-color: #ef4444; }
+  .shop-item.sold { opacity: 0.3; cursor: not-allowed; }
+  .shop-item-icon { width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; font-size: 26px; margin-bottom: 4px; }
+  .shop-item-icon img { width: 100%; height: 100%; object-fit: contain; image-rendering: pixelated; }
+  .shop-item-name { font-size: 10px; text-align: center; color: #fff; margin-bottom: 4px; }
+  .shop-item-price { display: flex; align-items: center; gap: 4px; font-size: 12px; color: #38bdf8; font-weight: 700; }
+  .shop-item-price img { width: 14px; height: 14px; object-fit: contain; image-rendering: pixelated; }
+  
+  .shop-rubina { position: absolute; bottom: 0px; right: -20px; width: 160px; height: 300px; display: flex; align-items: flex-end; justify-content: center; pointer-events: none; z-index: 5; }
+  .rubina-sprite { width: 100%; height: 100%; background-size: contain; background-repeat: no-repeat; background-position: bottom center; image-rendering: pixelated; filter: drop-shadow(0 0 20px rgba(239, 68, 68, 0.6)); }
+  .rubina-sprite.shop-idle { background-image: url('textures/rubina_idle.png'); }
+  .rubina-sprite.no-img { font-size: 14px; color: #ef4444; text-align: center; display: flex; align-items: center; justify-content: center; border: 1px dashed #ef4444; height: 100px; }
+  
+  .rubina-bubble { position: absolute; bottom: 300px; right: 15px; background: #141414; border: 1px solid #ef4444; border-radius: 6px; padding: 12px; font-size: 11px; color: #fff; text-align: center; width: 150px; opacity: 0; transition: opacity 0.3s; z-index: 20; box-shadow: 0 4px 10px rgba(0,0,0,0.8); }
+  .rubina-bubble.show { opacity: 1; }
+  .rubina-bubble::after { content: ''; position: absolute; bottom: -8px; left: 50%; transform: translateX(-50%); border-left: 8px solid transparent; border-right: 8px solid transparent; border-top: 8px solid #ef4444; }
+
+  .shop-timer { text-align: center; font-size: 12px; color: #888; margin-top: 10px; margin-bottom: 20px; }
+
+  #sapphiraRoomOverlay { background: url('textures/sapphira_room_bg.png') center/cover no-repeat, #0d0d0d; }
+  .room-content { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; }
+  .room-sapphira { width: 250px; height: 350px; background-size: contain; background-repeat: no-repeat; background-position: bottom center; image-rendering: pixelated; }
+  .room-sapphira.idle { background-image: url('textures/sapphira_idle.png'); }
+
+  .daily-reward-btn { position: absolute; top: 20px; left: 50%; transform: translateX(-50%); background: #e5e5e5; color: #0d0d0d; padding: 10px 20px; border: none; border-radius: 6px; font-family: inherit; font-size: 12px; font-weight: 700; cursor: pointer; z-index: 20; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
+  .daily-reward-btn:disabled { background: #333; color: #666; cursor: not-allowed; }
+
+  .profile-content { max-width: 500px; margin: 0 auto; width: 100%; text-align: center; }
+  .profile-name { font-size: 24px; font-weight: 700; letter-spacing: 2px; margin-bottom: 30px; color: #fff; }
+  .stat-row { display: flex; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid #2a2a2a; font-size: 14px; }
+  .stat-row span:first-child { color: #888; }
+  .stat-row span:last-child { font-weight: 700; }
+  
+  .btn-main { width: 100%; height: 50px; background: #e5e5e5; color: #0d0d0d; border: none; border-radius: 6px; font-size: 13px; letter-spacing: 2px; text-transform: uppercase; font-weight: 700; cursor: pointer; margin-top: 20px; transition: background 0.15s; font-family: inherit; }
+  .btn-main:hover { background: #fff; }
+  .btn-outline { width: 100%; height: 50px; background: transparent; color: #e5e5e5; border: 1px solid #3a3a3a; border-radius: 6px; font-size: 13px; letter-spacing: 2px; text-transform: uppercase; font-weight: 700; cursor: pointer; margin-top: 10px; transition: background 0.15s; font-family: inherit; }
+  .btn-outline:hover { background: #1a1a1a; }
+  .safe-mode-active { border-color: #4ade80 !important; color: #4ade80 !important; }
+
+  .particle { position: absolute; width: 4px; height: 4px; background: #fbbf24; border-radius: 50%; pointer-events: none; z-index: 5; box-shadow: 0 0 6px #fbbf24; }
+  /* Вспышки и эффекты — ПОД интерфейсом */
+#whiteFlash { position: fixed; inset: 0; background: #000000; opacity: 0; pointer-events: none; z-index: 99999; transition: opacity 2s ease-out; }
+#whiteFlash.active { opacity: 1; transition: none; }
+
+#flashOverlay { position: fixed; inset: 0; background: radial-gradient(circle, rgba(139,92,246,0.85), rgba(76,29,149,0.4)); opacity: 0; pointer-events: none; z-index: 999999; transition: opacity 0.15s; }
+#flashOverlay.active { opacity: 1; }
+
+#rainbowBg { position: fixed; inset: 0; opacity: 0; pointer-events: none; z-index: 10; transition: opacity 0.5s; background: linear-gradient(45deg, #ff0000, #ff7f00, #ffff00, #00ff00, #0000ff, #4b0082, #9400d3, #ff0000); background-size: 400% 400%; }
+#rainbowBg.active { opacity: 0.2; animation: rainbowMove 3s linear infinite; }
+@keyframes rainbowMove { 0% { background-position: 0% 50%; } 100% { background-position: 100% 50%; } }
+#infinityOverlay { position: fixed; inset: 0; background: #000; opacity: 0; pointer-events: none; z-index: 9999; transition: opacity 0.3s; }
+#
+Overlay.active { opacity: 1; }
+
+  .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 3000; display: none; justify-content: center; align-items: center; padding: 20px; }
+  .modal.open { display: flex; }
+  .modal-content { background: #141414; border: 1px solid #3a3a3a; border-radius: 6px; padding: 24px; max-width: 350px; width: 100%; text-align: center; }
+  .modal-title { font-size: 16px; letter-spacing: 2px; text-transform: uppercase; font-weight: 700; margin-bottom: 12px; color: #fff; }
+  .modal-text { font-size: 13px; color: #aaa; line-height: 1.5; margin-bottom: 20px; white-space: pre-line; }
+  .modal-btn { width: 100%; height: 44px; background: #e5e5e5; color: #0d0d0d; border: none; border-radius: 6px; font-size: 12px; letter-spacing: 2px; text-transform: uppercase; font-weight: 700; cursor: pointer; transition: background 0.2s; font-family: inherit; }
+  .modal-btn:hover { background: #fff; }
+
+  #caseOpenOverlay { z-index: 4000; background: rgba(0, 0, 0, 0); transition: background 0.5s ease; justify-content: center; align-items: center; padding: 0; overflow: hidden; }
+  #caseOpenOverlay.dark { background: rgba(0, 0, 0, 0.95); }
+  
+  .roulette-wrapper { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) translateY(-100vh); width: 100%; max-width: 350px; height: 120px; overflow: hidden; border: 2px solid #3a3a3a; border-radius: 6px; box-shadow: inset 0 0 30px rgba(0,0,0,0.9); opacity: 0; transition: none; }
+  .roulette-wrapper.visible { transform: translate(-50%, -50%) translateY(0); opacity: 1; transition: transform 0.5s cubic-bezier(0.1, 0.9, 0.2, 1), opacity 0.3s; }
+  .roulette-pointer { position: absolute; top: -10px; left: 50%; transform: translateX(-50%); width: 0; height: 0; border-left: 12px solid transparent; border-right: 12px solid transparent; border-top: 18px solid #fbbf24; z-index: 10; }
+  .roulette-track { display: flex; height: 100%; align-items: center; }
+  .roulette-item { width: 100px; height: 100%; flex-shrink: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; border-right: 1px solid #222; }
+  .roulette-item img { width: 50px; height: 50px; object-fit: contain; image-rendering: pixelated; image-rendering: crisp-edges; filter: drop-shadow(0 0 10px rgba(255,255,255,0.2)); }
+  .roulette-item .emoji-fallback { font-size: 40px; line-height: 1; }
+
+  #caseOpenBtn { position: absolute; bottom: 80px; left: 50%; transform: translateX(-50%) translateY(100vh); width: 200px; height: 50px; background: #e5e5e5; color: #0d0d0d; border: none; border-radius: 6px; font-family: inherit; font-size: 14px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; cursor: pointer; opacity: 0; transition: none; }
+  #caseOpenBtn.visible { transform: translateX(-50%) translateY(0); opacity: 1; transition: transform 0.4s cubic-bezier(0.1, 0.9, 0.2, 1), opacity 0.3s; }
+
+  #caseBackBtn { position: absolute; top: 30px; left: 50%; transform: translateX(-50%) translateY(-100vh); width: 120px; height: 40px; background: transparent; color: #fff; border: 1px solid #555; border-radius: 6px; font-family: inherit; font-size: 12px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; cursor: pointer; opacity: 0; transition: none; }
+  #caseBackBtn.visible { transform: translateX(-50%) translateY(0); opacity: 1; transition: transform 0.4s cubic-bezier(0.1, 0.9, 0.2, 1), opacity 0.3s; }
+
+  .result-text { position: absolute; top: 65%; left: 50%; transform: translate(-50%, 0); font-size: 18px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; opacity: 0; transition: all 0.5s ease-out; text-align: center; width: 100%; z-index: 10; }
+  .result-text.show { opacity: 1; }
+
+  @keyframes shake {
+    0% { transform: translate(1px, 1px) rotate(0deg); }
+    10% { transform: translate(-1px, -2px) rotate(-1deg); }
+    20% { transform: translate(-3px, 0px) rotate(1deg); }
+    30% { transform: translate(3px, 2px) rotate(0deg); }
+    40% { transform: translate(1px, -1px) rotate(1deg); }
+    50% { transform: translate(-1px, 2px) rotate(-1deg); }
+    60% { transform: translate(-3px, 1px) rotate(0deg); }
+    70% { transform: translate(3px, 1px) rotate(-1deg); }
+    80% { transform: translate(-1px, -1px) rotate(1deg); }
+    90% { transform: translate(1px, 2px) rotate(0deg); }
+    100% { transform: translate(1px, -2px) rotate(-1deg); }
+  }
+  .shake-screen { animation: shake 0.5s ease-in-out; }
+
+  .white-particle { position: fixed; width: 6px; height: 6px; background: #fff; border-radius: 50%; pointer-events: none; z-index: 500; box-shadow: 0 0 10px #fff; }
+
+  #sapphiraContainer { position: absolute; left: -400px; bottom: 50px; z-index: 15; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; transition: left 1.2s cubic-bezier(0.1, 0.9, 0.2, 1); pointer-events: none; height: 400px; }
+  #sapphiraContainer.visible { left: 10px; }
+
+  .sapphira-sprite { width: 220px; height: 280px; background-size: contain; background-repeat: no-repeat; background-position: bottom center; image-rendering: pixelated; image-rendering: crisp-edges; filter: drop-shadow(0 0 15px rgba(56, 189, 248, 0.25)); flex-shrink: 0; }
+  
+  .pose-idle { background-image: url('textures/sapphira_idle.png'); }
+  .pose-think { background-image: url('textures/sapphira_think.png'); }
+  .pose-angry { background-image: url('textures/sapphira_angry.png'); }
+  
+  .sapphira-sprite.no-img { background-image: none !important; width: 120px; height: 120px; font-size: 20px; color: #fff; text-align: center; border: 1px dashed #555; display: flex; align-items: center; justify-content: center; }
+
+  .sapphira-text-box { background: rgba(13, 13, 13, 0.95); border: 1px solid #555; border-radius: 6px; padding: 12px 16px; color: #fff; font-size: 14px; line-height: 1.5; margin-bottom: 10px; width: 280px; position: relative; opacity: 0; transform: translateY(10px); transition: opacity 0.2s, transform 0.2s; box-shadow: 0 4px 10px rgba(0,0,0,0.8); word-wrap: break-word; text-align: center; flex-shrink: 0; }
+  .sapphira-text-box.show { opacity: 1; transform: translateY(0); }
+  #rubinaTextBox.show { opacity: 1 !important; transform: translateY(0) !important; }
+  .sapphira-text-box::after { content: ''; position: absolute; bottom: -8px; left: 50%; transform: translateX(-50%); border-left: 8px solid transparent; border-right: 8px solid transparent; border-top: 8px solid #555; }
+  #startScreen { z-index: 5000; justify-content: center; align-items: center; text-align: center; }
+  .start-box { max-width: 400px; width: 100%; }
+  .start-box h2 { font-size: 20px; letter-spacing: 4px; margin-bottom: 30px; color: #ffd700; }
+  .start-box input { width: 100%; height: 50px; background: #141414; border: 1px solid #3a3a3a; border-radius: 6px; color: #fff; padding: 0 16px; font-size: 16px; margin-bottom: 20px; outline: none; font-family: inherit; }
+  .start-box input:focus { border-color: #888; }
+  .start-box .divider { margin: 20px 0; color: #555; font-size: 12px; letter-spacing: 2px; }
+  /* ===== Окно уведомлений ===== */
+.modal { position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 3000; display: none; justify-content: center; align-items: center; padding: 20px; }
+.modal.open { display: flex; }
+.modal-content { background: #141414; border: 1px solid #3a3a3a; border-radius: 6px; padding: 24px; max-width: 350px; width: 100%; text-align: center; }
+.modal-title { font-size: 16px; letter-spacing: 2px; text-transform: uppercase; font-weight: 700; margin-bottom: 12px; color: #fff; }
+.modal-text { font-size: 13px; color: #aaa; line-height: 1.5; margin-bottom: 20px; white-space: pre-line; }
+.modal-btn { width: 100%; height: 44px; background: #e5e5e5; color: #0d0d0d; border: none; border-radius: 6px; font-size: 12px; letter-spacing: 2px; text-transform: uppercase; font-weight: 700; cursor: pointer; font-family: inherit; }
+
+/* ===== Сапфира ===== */
+#sapphiraContainer { position: absolute; left: -400px; bottom: 50px; z-index: 15; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; transition: left 1.2s cubic-bezier(0.1, 0.9, 0.2, 1); pointer-events: none; height: 400px; }
+#sapphiraContainer.visible { left: 10px; }
+.sapphira-sprite { width: 220px; height: 280px; background-size: contain; background-repeat: no-repeat; background-position: bottom center; image-rendering: pixelated; filter: drop-shadow(0 0 15px rgba(56,189,248,0.25)); flex-shrink: 0; }
+.pose-idle { background-image: url('textures/sapphira_idle.png'); }
+.pose-think { background-image: url('textures/sapphira_think.png'); }
+.pose-angry { background-image: url('textures/sapphira_angry.png'); }
+.sapphira-sprite.no-img { background-image: none !important; width: 120px; height: 120px; font-size: 20px; color: #fff; text-align: center; border: 1px dashed #555; display: flex; align-items: center; justify-content: center; }
+.sapphira-text-box { background: rgba(13,13,13,0.95); border: 1px solid #555; border-radius: 6px; padding: 12px 16px; color: #fff; font-size: 14px; line-height: 1.5; margin-bottom: 10px; width: 280px; position: relative; opacity: 0; transform: translateY(10px); transition: opacity 0.2s, transform 0.2s; box-shadow: 0 4px 10px rgba(0,0,0,0.8); text-align: center; flex-shrink: 0; }
+.sapphira-text-box.show { opacity: 1; transform: translateY(0); }
+#rubinaTextBox.show { opacity: 1 !important; transform: translateY(0) !important; }
+#shopOverlay { overflow-y: auto; }
+</style>
+</head>
+<body>
+
+    <audio id="soundLegendary" src="audio/legendary.mp3" preload="auto"></audio>
+<audio id="soundCosmic" src="audio/cosmic.mp3" preload="auto"></audio>
+<audio id="soundRainbow" src="audio/rainbow.mp3" preload="auto"></audio>
+<audio id="soundInfinite" src="audio/infinite.mp3" preload="auto"></audio>
+
+<audio id="bgMusic" src="audio/background.mp3" loop></audio>
+
+    
+
+<script>
+  var bgMusic = document.getElementById('bgMusic');
+  bgMusic.volume = 0.25;
+
+  function startBackgroundMusic() {
+    bgMusic.play();
+
+    document.removeEventListener('click', startBackgroundMusic);
+    document.removeEventListener('keydown', startBackgroundMusic);
+  }
+
+  document.addEventListener('click', startBackgroundMusic);
+  document.addEventListener('keydown', startBackgroundMusic);
+</script>
+
+
+<script>
+  window.onerror = function (message, source, lineno, colno, error) {
+    var details =
+      'Ошибка: ' + message +
+      '\nФайл: ' + (source || 'неизвестен') +
+      '\nСтрока: ' + (lineno || 'неизвестна') +
+      '\nСтолбец: ' + (colno || 'неизвестен');
+
+    if (error && error.stack) {
+      details += '\n\nСтек ошибки:\n' + error.stack;
+    }
+
+    alert(details);
+    return false;
+  };
+</script>
+
+<div id="rainbowBg"></div>
+<div id="whiteFlash"></div>
+<div id="flashOverlay"></div>
+<div id="infinityOverlay"></div>
+
+<div class="modal" id="customModal" style="display:none">
+  <div class="modal-content">
+    <div class="modal-title" id="modalTitle">Уведомление</div>
+    <div class="modal-text" id="modalText">Текст сообщения</div>
+    <button class="modal-btn" id="modalBtn">ОК</button>
+  </div>
+</div>
+
+<div class="overlay" id="caseOpenOverlay">
+  <div class="roulette-wrapper" id="rouletteWrapper">
+    <div class="roulette-pointer"></div>
+    <div class="roulette-track" id="rouletteTrack"></div>
+  </div>
+  <button id="caseOpenBtn">Открыть</button>
+  <button id="caseBackBtn">Назад</button>
+  <div class="result-text" id="caseResult"></div>
+</div>
+
+<!-- ВЕРХНЯЯ ПАНЕЛЬ -->
+<div class="topbar">
+  <div class="dust-display" id="topDust">
+    <img src="textures/dust.png" onerror="this.outerHTML='✨'"> <span>0</span>
+  </div>
+  
+  <button class="menu-toggle" id="menuToggle">...</button>
+  
+  <div class="dropdown-menu" id="dropdownMenu">
+    <button id="menuShop">Магазин Рубины</button>
+    <button id="menuRoom" style="display: none;">Комната Сапфиры</button>
+    <button id="menuCase">Кейсы</button>
+    <button id="menuCraft">Крафт</button>
+    <button id="menuProfile">Профиль</button>
+    <button id="menuInv">Инвентарь</button>
+  </div>
+</div>
+
+<!-- АКТИВНЫЕ БАФФЫ -->
+<div id="activeBuffs" style="position: fixed; top: 70px; right: 16px; z-index: 50; display: flex; flex-direction: column; gap: 8px; pointer-events: none;"></div>
+
+<!-- СЦЕНА -->
+<div class="stage">
+  <div id="crystalDisplay"></div>
+  <div id="rarityLabel"></div>
+  
+  <!-- САПФИРА -->
+  <div id="sapphiraContainer">
+    <div class="sapphira-text-box" id="sapphiraTextBox"></div>
+    <div class="sapphira-sprite pose-idle" id="sapphiraSprite"></div>
+  </div>
+
+  <!-- РУБИНА (ТУТ, ВНУТРИ СЦЕНЫ) -->
+  <div id="rubinaContainer" style="position: absolute; right: -400px; bottom: 50px; z-index: 15; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; transition: right 1.2s cubic-bezier(0.1, 0.9, 0.2, 1); pointer-events: none; height: 400px;">
+    <div id="rubinaTextBox" style="background: rgba(13, 13, 13, 0.95); border: 1px solid #ef4444; border-radius: 6px; padding: 12px 16px; color: #fff; font-size: 14px; line-height: 1.5; margin-bottom: 10px; width: 280px; position: relative; opacity: 0; transform: translateY(10px); transition: opacity 0.2s, transform 0.2s; box-shadow: 0 4px 10px rgba(0,0,0,0.8); word-wrap: break-word; text-align: center; flex-shrink: 0;"></div>
+    <div class="rubina-sprite" style="width: 220px; height: 280px; background-size: contain; background-repeat: no-repeat; background-position: bottom center; image-rendering: pixelated; image-rendering: crisp-edges; filter: drop-shadow(0 0 15px rgba(239, 68, 68, 0.25)); flex-shrink: 0; background-image: url('textures/rubina_idle.png');"></div>
+  </div>
+</div>
+
+<!-- НИЖНЯЯ ПАНЕЛЬ -->
+<div class="bottom-bar">
+  <button id="digBtn">Копать<div id="cdBar"></div></button>
+  
+  <audio id="digSound" src="audio/drip.mp3" preload="auto"></audio>
+
+<script>
+  var digButton = document.getElementById('digBtn');
+  var digSound = document.getElementById('digSound');
+
+  digButton.addEventListener('click', function () {
+    digSound.currentTime = 0;
+    digSound.play().catch(function () {});
+  });
+</script>
+  
+  <!-- СПЯЩАЯ САПФИРА -->
+  <div class="sleeping-character" id="sapphiraSleeping">
+    <div class="zzz" style="top: 0px; left: 20px; animation-delay: 0s;">Z</div>
+    <div class="zzz" style="top: -10px; left: 40px; animation-delay: 0.7s; font-size: 14px;">Z</div>
+    <div class="zzz" style="top: -20px; left: 60px; animation-delay: 1.4s; font-size: 12px;">Z</div>
+  </div>
+
+  <!-- СПЯЩАЯ РУБИНА -->
+  <div class="sleeping-character" id="rubinaSleeping">
+    <div class="zzz" style="top: 0px; right: 20px; animation-delay: 0.3s;">Z</div>
+    <div class="zzz" style="top: -10px; right: 40px; animation-delay: 1.0s; font-size: 14px;">Z</div>
+    <div class="zzz" style="top: -20px; right: 60px; animation-delay: 1.7s; font-size: 12px;">Z</div>
+  </div>
+</div>
+
+<!-- ===== Инвентарь ===== -->
+<div class="overlay" id="inventory">
+  <div class="overlay-header">
+    <h2>Инвентарь</h2>
+    <button class="btn-close" id="closeInv">Закрыть</button>
+  </div>
+<div class="inv-tabs" id="invTabs">
+  <button class="inv-tab active" data-cat="all">Все</button>
+  <button class="inv-tab" data-cat="basic">Базовые</button>
+  <button class="inv-tab" data-cat="event">Ивентовые</button>
+  <button class="inv-tab" data-cat="craft">Крафтовые</button>
+  <button class="inv-tab" data-cat="items">Вещи</button>
+  <button class="inv-tab" data-cat="gems">Самоцветы</button>
+</div>
+  <div class="inv-grid" id="invGrid"></div>
+</div>
+
+<!-- ===== МАГАЗИН РУБИНЫ ===== -->
+<div class="overlay" id="shopOverlay">
+  <div class="overlay-header">
+    <h2>Магазин Рубины</h2>
+    <button class="btn-close" id="closeShop">Закрыть</button>
+  </div>
+  <div class="shop-timer" id="shopTimer">Обновление через 06:00:00</div>
+  <button class="btn-outline" id="freeRerollBtn" style="display:none; height:40px; margin:0 0 12px; font-size:11px;">Бесплатно обновить товары</button>
+  <div class="shop-container">
+    <div class="shop-items" id="shopItems"></div>
+    <div class="shop-rubina">
+      <div class="rubina-sprite shop-idle" id="rubinaSprite"></div>
+      <div class="rubina-bubble" id="rubinaBubble">Привет!</div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== КОМНАТА САПФИРЫ ===== -->
+<div class="overlay" id="sapphiraRoomOverlay">
+  <div class="overlay-header">
+    <h2>Комната Сапфиры</h2>
+    <button class="btn-close" id="closeRoom">Закрыть</button>
+  </div>
+  <div class="room-content">
+    <button class="daily-reward-btn" id="dailyRewardBtn">Забрать Мифический кейс</button>
+    <div class="room-sapphira idle"></div>
+  </div>
+</div>
+
+<!-- ===== Кейсы ===== -->
+<div class="overlay" id="caseMenu">
+  <div class="overlay-header">
+    <h2>Кейсы</h2>
+    <button class="btn-close" id="closeCase">Закрыть</button>
+  </div>
+  <div class="craft-list" id="caseList"></div>
+</div>
+
+<!-- ===== Крафт ===== -->
+<div class="overlay" id="craftMenu">
+  <div class="overlay-header">
+    <h2>Кристальная пыль</h2>
+    <button class="btn-close" id="closeCraft">Закрыть</button>
+  </div>
+  <div class="craft-list" id="craftList"></div>
+</div>
+
+<!-- ===== Профиль ===== -->
+<div class="overlay" id="profileMenu">
+  <div class="overlay-header">
+    <h2>Профиль</h2>
+    <button class="btn-close" id="closeProfile">Закрыть</button>
+  </div>
+  <div class="profile-content">
+    <div class="profile-name" id="profName">...</div>
+    <div class="stat-row"><span>Кристальная пыль</span><span id="statDust">0</span></div>
+    <div class="stat-row"><span>Всего копков</span><span id="statDigs">0</span></div>
+    <div class="stat-row"><span>Всего камней</span><span id="statStones">0</span></div>
+    <div class="stat-row"><span>Уникальных видов</span><span id="statUniq">0 / 10</span></div>
+    <button class="btn-outline" id="toggleSafeMode" style="margin-bottom: 10px;">Безопасный режим: ВЫКЛ</button>
+    <button class="btn-main" id="downloadBtn">Скачать файл профиля</button>
+    <button class="btn-outline" id="logoutBtn" style="border-color: #ef4444; color: #ef4444; margin-top: 30px;">Выйти из профиля</button>
+  </div>
+</div>
+
+<!-- ===== Стартовый экран ===== -->
+<div class="overlay open" id="startScreen">
+  <div class="start-box" id="startCreate">
+    <h2>Новый профиль</h2>
+    <input type="text" id="nameInput" placeholder="Введите имя..." maxlength="20">
+    <button class="btn-main" id="createBtn">Создать</button>
+    <div class="divider">ИЛИ</div>
+    <button class="btn-outline" id="showImportBtn">Импортировать профиль</button>
+  </div>
+  
+  <div class="start-box" id="startImport" style="display: none;">
+    <h2>Импорт</h2>
+    <input type="file" id="fileInput" accept=".json" style="display: none;">
+    <button class="btn-main" id="fileSelectBtn">Выбрать файл профиля</button>
+    <div class="divider">ИЛИ</div>
+    <textarea id="pasteInput" placeholder="Вставьте код профиля сюда..." style="width: 100%; height: 100px; background: #141414; border: 1px solid #3a3a3a; border-radius: 6px; color: #fff; padding: 10px; font-size: 12px; margin-bottom: 15px; outline: none; font-family: inherit;"></textarea>
+    <button class="btn-outline" id="pasteBtn">Загрузить из кода</button>
+    <button class="btn-close" id="backToCreate" style="width: 100%; margin-top: 20px;">Назад</button>
+  </div>
+</div>
+
+<div class="overlay" id="srScene" style="z-index:100000; background:#000; padding:0; opacity:0; transition:opacity 1s;">
+  <div id="srBg" style="position:absolute; inset:0; background:url('textures/background.png') center/cover no-repeat; opacity:0; transition:opacity 1.5s;"></div>
+  <div id="srRubina" style="position:absolute; bottom:8%; left:-400px; width:170px; height:270px; background:url('textures/rubina_idle.png') bottom center/contain no-repeat; image-rendering:pixelated; transition:left 1.2s cubic-bezier(0.1,0.9,0.2,1), opacity 0.3s;"></div>
+  <div id="srSapphira" style="position:absolute; bottom:8%; right:-400px; width:170px; height:270px; background:url('textures/sapphira_idle.png') bottom center/contain no-repeat; image-rendering:pixelated; transition:right 1.2s cubic-bezier(0.1,0.9,0.2,1), opacity 0.3s;"></div>
+  <div id="srText" style="position:absolute; left:50%; top:12%; transform:translateX(-50%); width:85%; max-width:340px; background:rgba(13,13,13,0.95); border:1px solid #555; border-radius:6px; padding:12px 16px; color:#fff; font-size:14px; line-height:1.5; text-align:center; opacity:0; transition:opacity 0.2s;"></div>
+</div>
+
+<script>
+// ============================================================
+//  🎁 НАСТРОЙКА КЕЙСОВ
+// ============================================================
+const CASES = [
+  { id: 'starter_case', name: 'Начальный кейс', emoji: '📦', img: 'textures/case_beginner.png', costDust: 50, costCommon: 50, drops: [ { chance: 70, rarityId: 'epic', amount: 2 }, { chance: 20, rarityId: 'mythic', amount: 2 }, { chance: 10, rarityId: 'legendary', amount: 2 } ] },
+  { id: 'epic_case', name: 'Эпический кейс', emoji: '💎', img: 'textures/case_epic.png', costDust: 250, costUncommon: 30, costEpic: 10, drops: [ { chance: 90, rarityId: 'mythic', amount: 2 }, { chance: 10, rarityId: 'space', amount: 1 } ] },
+  { id: 'mythic_case', name: 'Мифический кейс', emoji: '🎁', img: 'textures/case_mythic.png', costDust: 200, costMythic: 5, drops: [ { chance: 50, rarityId: 'legendary', amount: 3 }, { chance: 30, rarityId: 'space', amount: 2 }, { chance: 20, rarityId: 'rainbow', amount: 1 } ] },
+  { id: 'legendary_case', name: 'Легендарный кейс', emoji: '🏆', img: 'textures/case_legendary.png', costDust: 0, costLegendary: 50, drops: [ { chance: 70, rarityId: 'rainbow', amount: 3 }, { chance: 30, rarityId: 'infinity', amount: 1 } ] },
+  { id: 'space_case', name: 'Космический кейс', emoji: '🌌', img: 'textures/case_space.png', costDust: 0, costSpace: 10, drops: [ { chance: 80, rarityId: 'rainbow', amount: 1 }, { chance: 20, rarityId: 'infinity', amount: 1 } ] },
+  { id: 'rainbow_case', name: 'Радужный кейс', emoji: '🌈', img: 'textures/case_rainbow.png', costDust: 0, costRainbow: 25, drops: [ { chance: 50, rarityId: 'rainbow', amount: 20 }, { chance: 40, rarityId: 'infinity', amount: 1 }, { chance: 10, rarityId: 'infinity', amount: 2 } ] }
+];
+
+// ============================================================
+//  ⚒️ НАСТРОЙКА КРАФТА
+// ============================================================
+const CRAFT_ITEMS = [
+  { id: 'bag_of_dust', name: 'Мешок пыли', cost: 10, effectKey: 'bag', img: 'textures/bag.png', emoji: '🎒' },
+  { id: 'lucky_charm', name: 'Талисман удачи', cost: 0, costRainbow: 5, costSpace: 10, effectKey: 'luck', img: 'textures/charm.png', emoji: '🍀' },
+  { id: 'crystal_glasses', name: 'Кристальные очки', cost: 150, effectKey: 'glasses', costMythic: 2, img: 'textures/glasses.png', emoji: '👓' },
+  { id: 'pickaxe_1', name: 'Кирка (Ур. 1)', cost: 100, effectKey: 'pickaxe_1', img: 'textures/pickaxe_1.png', emoji: '⛏️' },
+  { id: 'pickaxe_2', name: 'Кирка (Ур. 2)', cost: 300, effectKey: 'pickaxe_2', img: 'textures/pickaxe_2.png', emoji: '⛏️' },
+  { id: 'pickaxe_3', name: 'Кирка (Ур. 3)', cost: 1000, effectKey: 'pickaxe_3', img: 'textures/pickaxe_3.png', emoji: '⛏️' },
+  { id: 'sapphire_gift', name: 'Подарок для Сапфиры', cost: 250, effectKey: 'room', img: 'textures/gift.png', emoji: '🎁' },
+  { id: 'broken_crystal', name: 'Разбитый кристалл', cost: 0, costInfinity: 2, effectKey: 'broken', img: 'textures/broken_crystal.png', emoji: '💥' },
+  { id: 'sr_star_craft', name: 'Сапфиро-Рубиновая звезда', cost: 0, costCommon: 10, costUncommon: 10, costRare: 10, costEpic: 10, costMythic: 10, costLegendary: 10, costSpace: 10, costRainbow: 10, costInfinity: 10, effectKey: 'sr_star', img: 'textures/sr_star.png', emoji: '💠' },
+  {
+  id: 'gem_finder',
+  name: 'Искатель самоцветов',
+  cost: 10000,
+  costRainbow: 20,
+  costInfinity: 1,
+  effectKey: 'gem_finder',
+  unlockAfter: 'sr_star'
+}
+];
+
+const SHOP_ITEMS_POOL = [
+  { id: 'burger', name: 'Призрачный бургер', emoji: '🍔', img: 'textures/burger.png', minPrice: 100, maxPrice: 400, effect: 'luck_cosmic', type: 'burger' },
+  { id: 'random_crystal', name: 'Рандомный кристалл', emoji: '💎', img: 'textures/random_crystal.png', minPrice: 50, maxPrice: 200, effect: 'random_crystal', type: 'crystal' },
+  { id: 'strange_potion', name: 'Странное зелье', emoji: '🧪', img: 'textures/potion.png', minPrice: 500, maxPrice: 1000, effect: 'strange_potion', type: 'potion' },
+  { id: 'ruby_tea', name: 'Чай Рубины', emoji: '🍵', img: 'textures/ruby_tea.png', minPrice: 2000, maxPrice: 13000, effect: 'ruby_tea', type: 'tea' }
+];
+
+const SAPPHIRA_RANDOM_DIALOGS = [
+  [{ text: "А ты читал пользовательское соглашение?", pose: 'idle' }],
+  [{ text: "Где твой дом? Я хочу там пожить вместо тебя!", pose: 'think' }],
+  [ { text: "Какой твой любимый камень?", pose: 'idle' }, { text: "По глазам вижу, что Бесконечность. Кстати, тебе об этом только мечтать.", pose: 'think' } ],
+  [ { text: "Почему ты молчишь?", pose: 'idle' }, { text: "Дай угадаю, ты меня послал?", pose: 'angry' } ],
+  [ { text: "ЧТО ДЕЛАТЬ Я В ТУАЛЕТ НЕ МОГУ СХОДИТЬ?!", pose: 'angry' }, { text: "Стоп... я же призрак.", pose: 'idle' } ],
+  [{ text: "Бу!", pose: 'angry' }],
+  [{ text: "Ты на выходные и домой?", pose: 'idle' }],
+  [{ text: "Стоп, то есть ты живешь за мой счет! А это же заброшенная шахта.", pose: 'angry' }],
+  [{ text: "Если бы я могла, то я бы тебе помогла... возможно.", pose: 'think' }],
+  [{ text: "Чё ты вообще сюда приперся?! Только не уходи.", pose: 'angry' }],
+  [{ text: "А чё я призрак, а ты нет? Нечестно как-то.", pose: 'idle' }],
+  [{ text: "Человек на 80% состоит из воды, так что иди попей воды.", pose: 'idle' }],
+  [{ text: "И долго это будет продолжаться?", pose: 'think' }],
+  [{ text: "Продай мне свою душу! Ой, то есть кристалл... какой-нибудь. Ну, за бесплатно.", pose: 'angry' }],
+  [{ text: "А что ты мне на день рождения подаришь?", pose: 'idle' }],
+  [{ text: "Я устала.", pose: 'idle' }],
+  [{ text: "Я кстати не женщина, я просто призрак. Надеюсь, ты там ничего не надумывал.", pose: 'think' }],
+  [{ text: "Да ты неправильно играешь!", pose: 'angry' }],
+  [{ text: "Ты sombik?", pose: 'think' }],
+  [{ text: "Пошли 1 на 1 в КС.", pose: 'angry' }],
+  [{ text: "А тебе эти кристаллы нужны?", pose: 'think' }],
+  [{ text: "А землю точно можно есть?", pose: 'think' }],
+  [{ text: "10010101010101010101", pose: 'idle' }],
+  [{ text: "Ты любишь сапфиры?", pose: 'idle' }],
+  [{ text: "Я все твои кристаллы в казино проиграла.", pose: 'idle' }],
+  [{ text: "Скажи сыр.", pose: 'idle' }],
+  [{ text: "Ты меня вообще слушаешь?", pose: 'think' }],
+  [{ text: "Мне жарко! Или холодно? Или тепло?", pose: 'think' }],
+  [ { text: "У меня большие", pose: 'idle' }, { pause: 1000 }, { text: "Надежды на тебя. А ты о чем подумал!", pose: 'angry' } ],
+  [ { text: "Кстати мне 808 лет!", pose: 'idle' }, { pause: 1000 }, { text: "Если бы ты мог говорить, ты бы сказал что я милфа?", pose: 'think' } ],
+  [{ text: "Полетели на Мальдивы?", pose: 'think' }],
+  [{ text: "Я кстати могу удалить твоё сохранение. Ну это так, просто информация, наверное.", pose: 'idle' }],
+  [{ text: "Почему у меня так мало спрайтов? Надеюсь, в будущем разработчик сделает больше.", pose: 'angry' }],
+  [{ text: "Почему в шахте не появляются зомби, скелеты, пауки и криперы?", pose: 'think' }],
+  [{ text: "Если бы у меня было тело, то я бы ушла отсюда. Ну, только если бы ты ушёл.", pose: 'idle' }],
+  [{ text: "А что если эта игра станет популярной, и где-то нас с тобой шипперят? Страшно...", pose: 'think' }],
+  [{ text: "Кстати, на меня разработчик потратил больше сил, чем на эти камни. Ну, наверное.", pose: 'idle' }],
+  [{ text: "Ты вообще отдыхаешь?", pose: 'angry' }],
+  [{ text: "Кстати, а что за прямоугольник с текстом сверху меня?", pose: 'think' }],
+  [{ text: "Ты любишь рубины?", pose: 'idle' }],
+  [{ text: "Кстати, у меня есть сестра Рубина, она обожает яичницу.", pose: 'idle' }],
+  [{ text: "Поделись кристаллами.", pose: 'idle' }],
+  [{ text: "Кто-то скажите разработчику, чтоб он быстрее обновление делал.", pose: 'angry' }],
+    [{ text: "Я надеюсь ты не думаешь, что я в тебя влюбилась.", pose: 'angry' }],
+    [{ text: "pose: ’angry’", pose: 'angry' }]
+];
+
+const SAPPHIRA_TUTORIAL = [
+  { text: "О, приветствую, странник. Что ты забыл в моей шахте?", pose: 'idle' },
+  { pause: 2000 },
+  { text: "Ну и что ты молчишь?", pose: 'think' },
+  { pause: 1000 },
+  { text: "Я думала, ты испугаешься.", pose: 'angry' },
+  { pause: 1000 },
+  { text: "И так, давай я расскажу, что тебе надо делать.", pose: 'idle' },
+  { pause: 1000 },
+  { text: "Нажимаешь копать и получаешь кристаллы и кристальную пыль. Ты можешь улучшаться в крафте (что за бредовое название, ну ладно). Ты можешь открывать кейсы в разделе кейсы (боже, да кому я это объясняю?). Ну и в разделе профиль, не угадаешь, да, там твой профиль. Все, я думаю, ты все понял.", pose: 'idle' },
+  { pause: 1000 },
+  { text: "Пока!", pose: 'idle' }
+];
+
+const RARITIES = [
+  { id: 'common',    name: 'Обычный',      category: 'basic', chance: 45,   emoji: '⚪', img: 'textures/common.png',    effect: null },
+  { id: 'uncommon',  name: 'Необычный',    category: 'basic', chance: 25,   emoji: '🟢', img: 'textures/uncommon.png',  effect: null },
+  { id: 'rare',      name: 'Редкий',       category: 'basic', chance: 15,   emoji: '🔵', img: 'textures/rare.png',      effect: null },
+  { id: 'epic',      name: 'Эпический',    category: 'basic', chance: 8,    emoji: '🟣', img: 'textures/epic.png',      effect: null },
+  { id: 'mythic',    name: 'Мифический',   category: 'basic', chance: 4,    emoji: '🔴', img: 'textures/mythic.png',    effect: null },
+  { id: 'legendary', name: 'Легендарный',  category: 'basic', chance: 2,    emoji: '🟡', img: 'textures/legendary.png', effect: 'particles' },
+  { id: 'space',     name: 'Космический',  category: 'basic', chance: 0.9,  emoji: '🌌', img: 'textures/space.png',     effect: 'flash' },
+  { id: 'rainbow',   name: 'Радужный',     category: 'basic', chance: 0.1,  emoji: '🌈', img: 'textures/rainbow.png',   effect: 'rainbow' },
+  { id: 'infinity',  name: 'Бесконечность',category: 'basic', chance: 0.02, emoji: '♾️', img: 'textures/infinity.png',  effect: 'infinity' },
+  { id: 'shard',     name: 'Осколок',      category: 'craft', chance: 0,    emoji: '💠', img: 'textures/shard.png',     effect: null },
+  { id: 'sr_star', name: 'Сапфиро-Рубиновая звезда', category: 'craft', chance: 0, emoji: '💠', img: 'textures/sr_star.png', effect: 'rainbow' }
+];
+
+const PRELOADED_IMAGES = {};
+const TEXTURE_STATUS = {};
+
+function preloadTextures() {
+  return new Promise((resolve) => {
+    let pending = RARITIES.length + 6 + CRAFT_ITEMS.length + SHOP_ITEMS_POOL.length;
+    ['idle', 'think', 'angry', 'sleep'].forEach(pose => {
+      const img = new Image(); img.src = `textures/sapphira_${pose}.png`;
+      img.onload = () => { if (img.naturalWidth > 0) PRELOADED_IMAGES[`sapphira_${pose}`] = img; pending--; if (pending === 0) resolve(); };
+      img.onerror = () => { pending--; if (pending === 0) resolve(); };
+    });
+    const rImg = new Image(); rImg.src = `textures/rubina_idle.png`;
+    rImg.onload = () => { if (rImg.naturalWidth > 0) PRELOADED_IMAGES['rubina_idle'] = rImg; pending--; if (pending === 0) resolve(); };
+    rImg.onerror = () => { pending--; if (pending === 0) resolve(); };
+    const rsImg = new Image(); rsImg.src = `textures/rubina_sleep.png`;
+    rsImg.onload = () => { if (rsImg.naturalWidth > 0) PRELOADED_IMAGES['rubina_sleep'] = rsImg; pending--; if (pending === 0) resolve(); };
+    rsImg.onerror = () => { pending--; if (pending === 0) resolve(); };
+    const roomImg = new Image(); roomImg.src = `textures/sapphira_room_bg.png`;
+    roomImg.onload = () => { if (roomImg.naturalWidth > 0) PRELOADED_IMAGES['room_bg'] = roomImg; pending--; if (pending === 0) resolve(); };
+    roomImg.onerror = () => { pending--; if (pending === 0) resolve(); };
+    const dustImg = new Image(); dustImg.src = `textures/dust.png`;
+    dustImg.onload = () => { if (dustImg.naturalWidth > 0) PRELOADED_IMAGES['dust'] = dustImg; pending--; if (pending === 0) resolve(); };
+    dustImg.onerror = () => { pending--; if (pending === 0) resolve(); };
+
+    RARITIES.forEach(r => {
+      if (!r.img) { TEXTURE_STATUS[r.id] = false; pending--; if (pending === 0) resolve(); return; }
+      const img = new Image(); img.src = r.img + '?v=1'; 
+      img.onload = () => {
+        if (img.naturalWidth > 0 && img.naturalHeight > 0) { TEXTURE_STATUS[r.id] = true; PRELOADED_IMAGES[r.id] = img; }
+        else { TEXTURE_STATUS[r.id] = false; }
+        pending--; if (pending === 0) resolve();
+      };
+      img.onerror = () => { TEXTURE_STATUS[r.id] = false; pending--; if (pending === 0) resolve(); };
+    });
+
+    CRAFT_ITEMS.forEach(item => {
+      if (!item.img) { pending--; if (pending === 0) resolve(); return; }
+      const img = new Image(); img.src = item.img;
+      img.onload = () => { if (img.naturalWidth > 0) PRELOADED_IMAGES[item.id] = img; pending--; if (pending === 0) resolve(); };
+      img.onerror = () => { pending--; if (pending === 0) resolve(); };
+    });
+
+    SHOP_ITEMS_POOL.forEach(item => {
+      if (!item.img) { pending--; if (pending === 0) resolve(); return; }
+      const img = new Image(); img.src = item.img;
+      img.onload = () => { if (img.naturalWidth > 0) PRELOADED_IMAGES[item.id] = img; pending--; if (pending === 0) resolve(); };
+      img.onerror = () => { pending--; if (pending === 0) resolve(); };
+    });
+  });
+}
+
+function getCrystalNode(rarity) {
+  if (TEXTURE_STATUS[rarity.id] === true && PRELOADED_IMAGES[rarity.id]) {
+    const clone = PRELOADED_IMAGES[rarity.id].cloneNode(); clone.alt = rarity.name; return clone;
+  } else {
+    const span = document.createElement('span'); span.className = 'emoji-fallback'; span.textContent = rarity.emoji; return span;
+  }
+}
+
+const GEMS = {
+  copper: {
+    name: 'Медный самоцвет',
+    emoji: '🟤',
+    img: 'textures/copper_gem.png'
+  },
+  silver: {
+    name: 'Серебряный самоцвет',
+    emoji: '⚪',
+    img: 'textures/silver_gem.png'
+  },
+  gold: {
+    name: 'Золотой самоцвет',
+    emoji: '🟡',
+    img: 'textures/gold_gem.png'
+  }
+};
+
+function getGemNode(gemId) {
+  var files = {
+    copper: "copper.png",
+    silver: "silver.png",
+    gold: "gold.png"
+  };
+
+  var fileName = files[gemId];
+  var item = document.createElement("div");
+  item.className = "gem-item";
+
+  if (!fileName) {
+    console.error("Неизвестный самоцвет:", gemId);
+    item.textContent = "";
+    return item;
+  }
+
+  var img = document.createElement("img");
+  img.className = "gem-sprite";
+  img.alt = gemId;
+
+  img.onload = function () {
+    console.log("Спрайт загружен:", img.src);
+  };
+
+  img.onerror = function () {
+    console.error("Не удалось загрузить спрайт:", img.src);
+    item.textContent = "";
+  };
+
+  // Если файлы лежат прямо в textures:
+  img.src = "textures/" + fileName;
+
+  // Если они лежат в textures/gems, вместо строки выше используй:
+  // img.src = "textures/gems/" + fileName;
+
+  item.appendChild(img);
+  return item;
+}
+
+function getCraftIcon(item) {
+  if (PRELOADED_IMAGES[item.id]) { return `<img src="${PRELOADED_IMAGES[item.id].src}" style="width:100%;height:100%;object-fit:contain; image-rendering: pixelated;">`; }
+  return item.emoji || '❓';
+}
+
+function getStoneIconHTML(stoneId) {
+  // Возвращаем пустую строку, чтобы картинки и эмодзи не отображались
+  return '';
+}
+
+function getDustIconHTML() {
+  if (PRELOADED_IMAGES['dust']) { return `<img src="textures/dust.png" style="width:20px;height:20px;object-fit:contain; image-rendering: pixelated;">`; }
+  return '✨';
+}
+
+let inventory = {};
+RARITIES.forEach(r => inventory[r.id] = 0);
+inventory.copper = inventory.copper || 0;
+inventory.silver = inventory.silver || 0;
+inventory.gold = inventory.gold || 0;
+let itemInventory = {
+  burger: 0,
+  strange_potion: 0
+};
+let playerName = '';
+let totalDigs = 0;
+let totalStones = 0;
+let dust = 0;
+let hasGlasses = false;
+let hasBag = false;
+let hasLuckCharm = false;
+let hasRoom = false;
+let hasBrokenCrystal = false;
+let safeMode = localStorage.getItem('crystalSafeMode') === 'true';
+let currentCase = null;
+let caseRefunded = false;
+let isTutorialDone = false;
+
+let hasSeenSrStarScene =
+  localStorage.getItem('hasSeenSrStarScene') === 'true';
+
+let lastFreeCaseTime = 0;
+let lastShopRefresh = 0;
+let currentShopItems = [];
+
+let baseCooldown = 2000;
+let pickaxeLevel = 0;
+
+let cooldownEnd = 0;
+let cooldownTimer = null;
+let luckBuffEnd = 0;
+
+let sapphiraState = 'hidden';
+let sapphiraTimer = null;
+let tutorialInterrupts = 0;
+let randomDialogTimeout = null;
+let currentSequence = null;
+let currentStep = 0;
+let isPausedByInterrupt = false;
+let sapphiraSleepingBuff = false;
+let isTutorialActive = false;
+let sleepTimeout = null;
+
+let rubinaSleepState = 'hidden';
+let rubinaSleepTimeout = null;
+let rubinaRandomTimeout = null;
+const rubinaContainer = document.getElementById('rubinaContainer');
+const rubinaTextBox = document.getElementById('rubinaTextBox');
+
+const digBtn = document.getElementById('digBtn');
+const cdBar = document.getElementById('cdBar');
+const crystalDisplay = document.getElementById('crystalDisplay');
+const rarityLabel = document.getElementById('rarityLabel');
+const whiteFlash = document.getElementById('whiteFlash');
+const flashOverlay = document.getElementById('flashOverlay');
+const rainbowBg = document.getElementById('rainbowBg');
+const infinityOverlay = document.getElementById('infinityOverlay');
+const stage = document.querySelector('.stage');
+const invGrid = document.getElementById('invGrid');
+const craftList = document.getElementById('craftList');
+const caseList = document.getElementById('caseList');
+const shopItemsEl = document.getElementById('shopItems');
+const shopTimerEl = document.getElementById('shopTimer');
+const rubinaBubble = document.getElementById('rubinaBubble');
+const sapphiraContainer = document.getElementById('sapphiraContainer');
+const sapphiraSprite = document.getElementById('sapphiraSprite');
+const sapphiraTextBox = document.getElementById('sapphiraTextBox');
+const sapphiraSleeping = document.getElementById('sapphiraSleeping');
+const rubinaSleepingEl = document.getElementById('rubinaSleeping');
+const menuToggle = document.getElementById('menuToggle');
+const menuRoomBtn = document.getElementById('menuRoom');
+const startScreen = document.getElementById('startScreen');
+const startCreate = document.getElementById('startCreate');
+const startImport = document.getElementById('startImport');
+const nameInput = document.getElementById('nameInput');
+const fileInput = document.getElementById('fileInput');
+const pasteInput = document.getElementById('pasteInput');
+const safeModeBtn = document.getElementById('toggleSafeMode');
+const dailyRewardBtn = document.getElementById('dailyRewardBtn');
+const topDustEl = document.getElementById('topDust');
+const customModal = document.getElementById('customModal');
+const modalTitle = document.getElementById('modalTitle');
+const modalText = document.getElementById('modalText');
+const modalBtn = document.getElementById('modalBtn');
+
+const dropdownMenu = document.getElementById('dropdownMenu');
+
+menuToggle.addEventListener('click', (e) => {
+  e.stopPropagation();
+  dropdownMenu.classList.toggle('open');
+});
+
+document.addEventListener('click', () => {
+  dropdownMenu.classList.remove('open');
+});
+
+dropdownMenu.addEventListener('click', (e) => {
+  e.stopPropagation();
+});
+
+function showModal(title, text) {
+  modalTitle.textContent = title;
+  modalText.textContent = text;
+  customModal.style.display = 'flex';
+}
+
+modalBtn.addEventListener('click', () => {
+  customModal.style.display = 'none';
+});
+
+// САПФИРА
+function setSapphiraPose(pose) {
+  sapphiraSprite.className = `sapphira-sprite pose-${pose}`;
+  if (!PRELOADED_IMAGES[`sapphira_${pose}`]) {
+    sapphiraSprite.classList.add('no-img');
+    sapphiraSprite.textContent = `[Сапфира: ${pose}]`;
+  } else {
+    sapphiraSprite.classList.remove('no-img');
+    sapphiraSprite.textContent = '';
+  }
+}
+
+function showSapphira() { sapphiraContainer.classList.add('visible'); }
+
+function hideSapphira() {
+  sapphiraContainer.classList.remove('visible');
+  sapphiraTextBox.classList.remove('show');
+  
+  // Если она не спит — сбрасываем статус и запускаем таймер
+  if (sapphiraState !== 'sleeping') {
+    sapphiraState = 'hidden';
+    clearTimeout(sapphiraTimer);
+    
+    if (isTutorialDone) {
+      scheduleRandomDialog();
+    }
+  }
+}
+
+function playDialogSequence(sequence, isTutorial = false) {
+  if (sapphiraState !== 'hidden' && !isTutorial) return;
+  sapphiraState = isTutorial ? 'tutorial' : 'random';
+  currentSequence = sequence;
+  currentStep = 0;
+  isTutorialActive = isTutorial;
+  isPausedByInterrupt = false;
+  showSapphira();
+  nextStep();
+}
+
+function nextStep() {
+  if (currentStep >= currentSequence.length) {
+    setTimeout(() => {
+      hideSapphira();
+      if (isTutorialActive) { isTutorialDone = true; saveToLocal(); }
+    }, 500);
+    return;
+  }
+  const current = currentSequence[currentStep];
+  if (current.pause) {
+    sapphiraTextBox.classList.remove('show');
+    sapphiraTimer = setTimeout(() => {
+      if (isPausedByInterrupt) return;
+      currentStep++; nextStep();
+    }, current.pause);
+  } else {
+    setSapphiraPose(current.pose);
+    sapphiraTextBox.textContent = current.text;
+    sapphiraTextBox.classList.add('show');
+    let readTime = 2000 + Math.floor(current.text.length / 15) * 1000;
+    if (readTime < 3000) readTime = 3000;
+    sapphiraTimer = setTimeout(() => {
+      if (isPausedByInterrupt) return;
+      sapphiraTextBox.classList.remove('show');
+      currentStep++;
+      setTimeout(() => { if (!isPausedByInterrupt) nextStep(); }, 200);
+    }, readTime);
+  }
+}
+
+function startTutorial() { tutorialInterrupts = 0; playDialogSequence(SAPPHIRA_TUTORIAL, true); }
+
+function interruptTutorial() {
+  if (sapphiraState !== 'tutorial') return;
+  tutorialInterrupts++;
+  clearTimeout(sapphiraTimer);
+  if (tutorialInterrupts >= 3) {
+    isPausedByInterrupt = true; setSapphiraPose('angry'); sapphiraTextBox.textContent = "ДА ИДИ ТЫ!"; sapphiraTextBox.classList.add('show');
+    setTimeout(() => { hideSapphira(); isTutorialDone = true; saveToLocal(); scheduleRandomDialog(); }, 2000);
+  } else {
+    isPausedByInterrupt = true; setSapphiraPose('angry'); sapphiraTextBox.textContent = "НЕ ПЕРЕБИВАЙ МЕНЯ!"; sapphiraTextBox.classList.add('show');
+    setTimeout(() => {
+      isPausedByInterrupt = false; sapphiraTextBox.classList.remove('show');
+      const current = currentSequence[currentStep]; setSapphiraPose(current.pose); sapphiraTextBox.textContent = current.text; sapphiraTextBox.classList.add('show');
+      let readTime = 2000 + Math.floor(current.text.length / 15) * 1000;
+      if (readTime < 3000) readTime = 3000;
+      sapphiraTimer = setTimeout(() => {
+        sapphiraTextBox.classList.remove('show'); currentStep++;
+        setTimeout(() => { if (!isPausedByInterrupt) nextStep(); }, 200);
+      }, readTime);
+    }, 2000);
+  }
+}
+
+function scheduleRandomDialog() {
+  clearTimeout(randomDialogTimeout);
+  
+  // Если Сапфира УЖЕ спит, мы вообще не запускаем таймер
+  if (sapphiraState === 'sleeping') {
+    return; 
+  }
+
+  const delay = Math.floor(Math.random() * (60000 - 24000 + 1)) + 24000; 
+  
+  randomDialogTimeout = setTimeout(() => {
+    // Проверяем, что она не спит, туториал пройден и не открыто меню
+    if (sapphiraState === 'hidden' && !document.querySelector('.overlay.open') && isTutorialDone) {
+      
+      // 20% шанс, что она захочет спать
+      const isSleeping = Math.random() < 0.1;
+      
+      if (isSleeping) {
+        // 1. Говорит "Я спать"
+        playDialogSequence([{ text: "Я спать.", pose: 'idle' }], false);
+        
+        // 2. Через 2.5 секунды (когда договорит) — ложится
+        setTimeout(() => {
+           sapphiraState = 'sleeping'; // Меняем статус, чтобы больше не приходила
+           hideSapphira();
+           sapphiraSleeping.classList.add('show');
+           sapphiraSleepingBuff = true;
+           
+           // 3. Спит 60 секунд
+           sleepTimeout = setTimeout(() => {
+             sapphiraSleeping.classList.remove('show');
+             sapphiraSleepingBuff = false;
+             
+             // 4. Просыпается, говорит "Ох, я выспалась"
+             sapphiraState = 'hidden';
+             playDialogSequence([{ text: "Ох... я выспалась.", pose: 'idle' }], false);
+             
+             // 5. Включаем таймер заново (он включится внутри hideSapphira)
+           }, 60000);
+        }, 2500);
+        
+      } else {
+        // Если не спит — говорит рандомную фразу
+        const randomSeq = SAPPHIRA_RANDOM_DIALOGS[Math.floor(Math.random() * SAPPHIRA_RANDOM_DIALOGS.length)];
+        playDialogSequence(randomSeq, false);
+      }
+    } else {
+      // Если не смогли выйти — пробуем позже
+      scheduleRandomDialog();
+    }
+  }, delay);
+}
+
+// Не забудь добавить эти переменные в блок элементов, если их нет:
+// const rubinaContainer = document.getElementById('rubinaContainer');
+// const rubinaTextBox = document.getElementById('rubinaTextBox');
+
+function scheduleRubinaSleep() {
+  clearTimeout(rubinaRandomTimeout);
+  const delay = Math.floor(Math.random() * (600000 - 300000 + 1)) + 300000;
+  
+  rubinaRandomTimeout = setTimeout(() => {
+    if (rubinaSleepState === 'hidden' && !document.querySelector('.overlay.open') && isTutorialDone) {
+      startRubinaSleep();
+    } else {
+      scheduleRubinaSleep();
+    }
+  }, delay);
+}
+
+function rubinaSay(text) {
+  rubinaTextBox.textContent = text;
+  rubinaTextBox.style.opacity = '1';
+  rubinaTextBox.style.transform = 'translateY(0)';
+}
+function rubinaShutUp() {
+  rubinaTextBox.style.opacity = '0';
+  rubinaTextBox.style.transform = 'translateY(10px)';
+}
+
+function startRubinaSleep() {
+  rubinaSleepState = 'talking';
+  rubinaContainer.style.right = '10px';
+  rubinaSay("Я устала на работе. Я тут прилягу?");
+
+  setTimeout(() => {
+    rubinaShutUp();
+    rubinaContainer.style.right = '-400px';
+
+    setTimeout(() => {
+      rubinaSleepState = 'sleeping';
+      rubinaSleepingEl.classList.add('show');
+
+      rubinaSleepTimeout = setTimeout(() => {
+        rubinaSleepingEl.classList.remove('show');
+        rubinaSleepState = 'talking';
+        rubinaContainer.style.right = '10px';
+        rubinaSay("Ох, я выспалась. Пойду дальше торговать.");
+
+        setTimeout(() => {
+          rubinaShutUp();
+          rubinaContainer.style.right = '-400px';
+          setTimeout(() => {
+            rubinaSleepState = 'hidden';
+            scheduleRubinaSleep();
+          }, 1200);
+        }, 3000);
+      }, 60000);
+    }, 500);
+  }, 3000);
+}
+function renderShop() {
+  shopItemsEl.innerHTML = '';
+  currentShopItems.forEach(item => {
+    const div = document.createElement('div');
+    div.className = 'shop-item' + (item.sold ? ' sold' : '');
+    let iconHTML = item.emoji;
+    if (PRELOADED_IMAGES[item.id] && !item.crystalRarity) { iconHTML = `<img src="${PRELOADED_IMAGES[item.id].src}">`; }
+    else if (item.crystalRarity && TEXTURE_STATUS[item.crystalRarity]) { iconHTML = ` src="${item.img}">`; }
+    div.innerHTML = `<div class="shop-item-icon">${iconHTML}</div><div class="shop-item-name">${item.name}</div><div class="shop-item-price">${getDustIconHTML()} ${item.price}</div>`;
+    if (!item.sold) div.addEventListener('click', () => buyShopItem(item.uniqueId));
+    shopItemsEl.appendChild(div);
+  });
+}
+
+function buyShopItem(uniqueId) {
+  var item = currentShopItems.find(function (shopItem) {
+    return shopItem.uniqueId === uniqueId;
+  });
+
+  if (!item || item.sold) return;
+
+  if (dust < item.price) {
+    showModal('Рубина', 'Недостаточно пыли, дружок. Приходи, когда накопишь.');
+    return;
+  }
+
+  dust -= item.price;
+  item.sold = true;
+
+  var message = 'Ты купил предмет!';
+
+  if (item.effect === 'luck_cosmic') {
+    itemInventory.burger = (itemInventory.burger || 0) + 1;
+    message =
+      'Ты купил Призрачный бургер! Теперь у тебя их: ' +
+      itemInventory.burger;
+  } else if (item.effect === 'strange_potion') {
+    itemInventory.strange_potion =
+      (itemInventory.strange_potion || 0) + 1;
+    message =
+      'Ты купил Странное зелье! Теперь у тебя их: ' +
+      itemInventory.strange_potion;
+  } else if (item.effect === 'ruby_tea') {
+    itemInventory.ruby_tea = (itemInventory.ruby_tea || 0) + 1;
+    message =
+      'Ты купил Чай Рубины! Теперь у тебя его: ' +
+      itemInventory.ruby_tea;
+  } else if (item.effect === 'random_crystal') {
+    var rarityId = item.crystalRarity;
+    var amount = Math.floor(Math.random() * 3) + 1;
+    var rarityName = rarityId;
+    var i;
+
+    for (i = 0; i < RARITIES.length; i++) {
+      if (RARITIES[i].id === rarityId) {
+        rarityName = RARITIES[i].name;
+        break;
+      }
+    }
+
+    inventory[rarityId] = (inventory[rarityId] || 0) + amount;
+    message = 'Ты купил: ' + rarityName + ' x' + amount + '!';
+  }
+
+  showModal('Рубина', message);
+
+  saveToLocal();
+  updateDustUI();
+  renderShop();
+}
+
+function updateShopTimer() {
+  if (lastShopRefresh === 0) return;
+  const nextRefresh = lastShopRefresh + 6 * 60 * 60 * 1000;
+  const now = Date.now();
+  if (now >= nextRefresh) { initShop(); return; }
+  const diff = nextRefresh - now;
+  const hours = Math.floor(diff / (1000 * 60 * 60));
+  const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+  const secs = Math.floor((diff % (1000 * 60)) / 1000);
+  shopTimerEl.textContent = `Обновление через ${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+}
+setInterval(updateShopTimer, 1000);
+
+function updateDustUI() {
+  topDustEl.innerHTML = `${getDustIconHTML()} <span>${dust}</span>`;
+  if (document.getElementById('statDust')) document.getElementById('statDust').textContent = dust;
+}
+
+function createShopItem(index, now = Date.now()) {
+  const base =
+    SHOP_ITEMS_POOL[Math.floor(Math.random() * SHOP_ITEMS_POOL.length)];
+
+  const item = {
+    ...base,
+    uniqueId: "shop_" + now + "_" + index,
+    price:
+      Math.floor(Math.random() * (base.maxPrice - base.minPrice + 1)) +
+      base.minPrice,
+    sold: false,
+  };
+
+  if (base.effect === "random_crystal") {
+    const crystalPool = ["common", "uncommon", "rare", "epic"];
+    const rid = crystalPool[Math.floor(Math.random() * crystalPool.length)];
+    const rarity = RARITIES.find((r) => r.id === rid);
+
+    item.crystalRarity = rid;
+    item.name = "Кристалл: " + rarity.name;
+    item.img = rarity.img;
+    item.emoji = rarity.emoji;
+  }
+
+  return item;
+}
+
+function unlockExtraShopSlots() {
+  hasSeenSrStarScene = true;
+
+  const now = Date.now();
+
+  while (currentShopItems.length < 10) {
+    const index = currentShopItems.length;
+    currentShopItems.push(createShopItem(index, now));
+  }
+
+  saveToLocal();
+  renderShop();
+}
+
+function initShop() {
+  const now = Date.now();
+  const refreshInterval = 6 * 60 * 60 * 1000;
+  const targetCount = hasSeenSrStarScene ? 10 : 6;
+  const crystalPool = ['common', 'uncommon', 'rare', 'epic'];
+
+  const shouldRefresh =
+    now - lastShopRefresh >= refreshInterval ||
+    currentShopItems.length === 0;
+
+  if (shouldRefresh) {
+    lastShopRefresh = now;
+    currentShopItems = [];
+  }
+
+  const previousCount = currentShopItems.length;
+
+  for (let i = currentShopItems.length; i < targetCount; i++) {
+    const base =
+      SHOP_ITEMS_POOL[
+        Math.floor(Math.random() * SHOP_ITEMS_POOL.length)
+      ];
+
+    const item = {
+      ...base,
+      uniqueId: 'shop_' + now + '_' + i,
+      price:
+        Math.floor(Math.random() * (base.maxPrice - base.minPrice + 1)) +
+        base.minPrice,
+      sold: false
+    };
+
+    if (base.effect === 'random_crystal') {
+      const rid =
+        crystalPool[Math.floor(Math.random() * crystalPool.length)];
+      const rar = RARITIES.find(r => r.id === rid);
+
+      item.crystalRarity = rid;
+      item.name = 'Кристалл: ' + rar.name;
+      item.img = rar.img;
+      item.emoji = rar.emoji;
+    }
+
+    currentShopItems.push(item);
+  }
+
+  if (shouldRefresh || currentShopItems.length > previousCount) {
+    saveToLocal();
+  }
+
+  renderShop();
+}
+
+  const bubble = document.getElementById('rubinaBubble');
+  updateShopRubina();
+  if (bubble && rubinaSleepState === 'hidden') {
+    const phrases = ["О, снова ты. Ну, проходи...", "У меня сегодня отличный товар.", "Рада тебя опять видеть.", "Чего желаешь?"];
+    bubble.textContent = phrases[Math.floor(Math.random() * phrases.length)];
+    bubble.classList.add('show');
+    setTimeout(() => bubble.classList.remove('show'), 4000);
+  }
+
+function unlockExtraShopSlots() {
+  hasSeenSrStarScene = true;
+  currentShopItems = [];
+  lastShopRefresh = 0;
+  initShop();
+}
+
+function updateShopRubina() {
+  const el = document.querySelector('.shop-rubina');
+  if (el) el.style.display = (rubinaSleepState === 'hidden') ? 'flex' : 'none';
+}
+setInterval(updateShopRubina, 500);
+
+function updateProfileMenu() {
+  document.getElementById('profName').textContent = playerName;
+  document.getElementById('statDigs').textContent = totalDigs;
+  document.getElementById('statStones').textContent = totalStones;
+  document.getElementById('statDust').textContent = dust; 
+  let uniq = 0; RARITIES.forEach(r => { if (inventory[r.id] > 0) uniq++; });
+  document.getElementById('statUniq').textContent = uniq + ' / ' + RARITIES.length;
+}
+
+function saveToLocal() {
+  const data = { 
+    name: playerName, 
+    inv: inventory, 
+    digs: totalDigs, 
+    stones: totalStones, 
+    dust: dust, 
+    glasses: hasGlasses, 
+    bag: hasBag, 
+    luckCharm: hasLuckCharm, 
+    room: hasRoom, 
+    broken: hasBrokenCrystal, 
+    tutorial: isTutorialDone, 
+    pickaxe: pickaxeLevel, 
+    freeCase: lastFreeCaseTime, 
+    shopTime: lastShopRefresh, 
+    shopItems: currentShopItems,
+    
+    // 👇 ВОТ СЮДА ДОБАВЬ ЭТИ ДВЕ СТРОЧКИ 👇
+    itemInv: itemInventory,
+    buffs: activeBuffs, srScene: srStarSceneDone, freeReroll: lastFreeReroll
+    // 👆 -------------------------------- 👆
+  };
+  localStorage.setItem('crystalProfile', JSON.stringify(data));
+}
+
+function loadFromLocal() {
+  const saved = localStorage.getItem('crystalProfile');
+  if (saved) {
+    try {
+      const data = JSON.parse(saved);
+      
+      // Загрузка основных данных
+      playerName = data.name || 'Игрок';
+      inventory = data.inv || {};
+      totalDigs = data.digs || 0;
+      totalStones = data.stones || 0;
+      dust = data.dust || 0;
+      
+      // Загрузка флагов и улучшений
+      hasGlasses = data.glasses || false;
+      hasBag = data.bag || false;
+      hasLuckCharm = data.luckCharm || false;
+      hasRoom = data.room || false;
+      hasBrokenCrystal = data.broken || false;
+      isTutorialDone = data.tutorial || false;
+      pickaxeLevel = data.pickaxe || 0;
+      
+      // Загрузка магазина и таймеров
+      lastFreeCaseTime = data.freeCase || 0;
+      lastShopRefresh = data.shopTime || 0;
+      currentShopItems = data.shopItems || [];
+      
+      // 👇 ЗАГРУЗКА ВЕЩЕЙ И БАФФОВ 👇
+      itemInventory = data.itemInv || { burger: 0 };
+      srStarSceneDone = data.srScene || false; lastFreeReroll = data.freeReroll || 0;
+      // 👆 ---------------------- 👆
+
+      // Пересчет кулдауна кирки
+      baseCooldown = 2000 - (pickaxeLevel * 300);
+      if (baseCooldown < 1000) baseCooldown = 1000;
+
+      // Показ кнопки комнаты, если она куплена
+      if (hasRoom) menuRoomBtn.style.display = 'block';
+
+      // Проверка, чтобы все камни были в инвентаре (даже если их не было в сейве)
+      RARITIES.forEach(r => { if (inventory[r.id] === undefined) inventory[r.id] = 0; });
+      
+      // Восстанавливаем таймеры баффов на экране
+      if (typeof updateBuffsUI === 'function') updateBuffsUI();
+
+      return true;
+    } catch(e) { 
+      console.error("Ошибка загрузки профиля:", e);
+      return false; 
+    }
+  }
+  return false;
+}
+
+function updateSafeModeBtn() { safeModeBtn.textContent = 'Безопасный режим: ' + (safeMode ? 'ВКЛ' : 'ВЫКЛ'); safeModeBtn.classList.toggle('safe-mode-active', safeMode); }
+safeModeBtn.addEventListener('click', () => { safeMode = !safeMode; localStorage.setItem('crystalSafeMode', safeMode); updateSafeModeBtn(); });
+
+document.getElementById('createBtn').addEventListener('click', () => {
+  playerName = nameInput.value.trim() || 'Игрок'; inventory = {}; RARITIES.forEach(r => inventory[r.id] = 0);
+  totalDigs = 0; totalStones = 0; dust = 0; hasGlasses = false; hasBag = false; hasLuckCharm = false; hasRoom = false; hasBrokenCrystal = false;
+  isTutorialDone = false; pickaxeLevel = 0; baseCooldown = 2000; lastFreeCaseTime = 0; lastShopRefresh = 0; currentShopItems = [];
+  menuRoomBtn.style.display = 'none'; saveToLocal(); updateDustUI(); startScreen.classList.remove('open');
+  if (!isTutorialDone) setTimeout(startTutorial, 1000);
+});
+
+document.getElementById('downloadBtn').addEventListener('click', () => {
+  saveToLocal(); const data = JSON.parse(localStorage.getItem('crystalProfile'));
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `profile_${playerName}.json`; a.click(); URL.revokeObjectURL(url);
+});
+
+document.getElementById('logoutBtn').addEventListener('click', () => { if (confirm('Выйти из профиля? Не забудь скачать файл!')) { localStorage.removeItem('crystalProfile'); location.reload(); } });
+document.getElementById('fileSelectBtn').addEventListener('click', () => fileInput.click());
+
+fileInput.addEventListener('change', (e) => {
+  const file = e.target.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (event) => { try { const data = JSON.parse(event.target.result); applyImportedData(data); } catch(err) { showModal('Ошибка', 'Ошибка чтения файла!'); } };
+  reader.readAsText(file);
+});
+
+document.getElementById('pasteBtn').addEventListener('click', () => { try { const data = JSON.parse(pasteInput.value); applyImportedData(data); } catch(err) { showModal('Ошибка', 'Неверный код профиля!'); } });
+
+function applyImportedData(data) {
+  if (!data.name || !data.inv) return showModal('Ошибка', 'Неверный формат профиля!');
+  playerName = data.name; inventory = data.inv; totalDigs = data.digs || 0; totalStones = data.stones || 0; dust = data.dust || 0;
+  hasGlasses = data.glasses || false; hasBag = data.bag || false; hasLuckCharm = data.luckCharm || false; hasRoom = data.room || false; hasBrokenCrystal = data.broken || false;
+  isTutorialDone = data.tutorial !== undefined ? data.tutorial : true; pickaxeLevel = data.pickaxe || 0; lastFreeCaseTime = data.freeCase || 0; lastShopRefresh = data.shopTime || 0; currentShopItems = data.shopItems || [];
+  baseCooldown = 2000 - (pickaxeLevel * 300); if (baseCooldown < 1000) baseCooldown = 1000;
+  if (hasRoom) menuRoomBtn.style.display = 'block';
+  RARITIES.forEach(r => { if (inventory[r.id] === undefined) inventory[r.id] = 0; });
+  itemInventory = data.itemInv || {
+  burger: 0,
+  strange_potion: 0,
+  ruby_tea: 0
+};
+
+activeBuffs = data.buffs || {};
+
+// Загружаем флаг сцены и время бесплатного обновления магазина.
+// Для старых профилей считаем сцену уже просмотренной,
+// если звезда в них уже есть.
+srStarSceneDone =
+  data.srScene ?? ((inventory.sr_star || 0) > 0);
+
+lastFreeReroll = data.freeReroll || 0;
+  saveToLocal(); updateDustUI(); startScreen.classList.remove('open'); showModal('Успех', 'Профиль успешно загружен!');
+}
+
+document.getElementById('showImportBtn').addEventListener('click', () => { startCreate.style.display = 'none'; startImport.style.display = 'block'; });
+document.getElementById('backToCreate').addEventListener('click', () => { startImport.style.display = 'none'; startCreate.style.display = 'block'; });
+
+function renderCraft() {
+  craftList.innerHTML = '';
+  CRAFT_ITEMS.forEach(item => {
+    const card = document.createElement('div');
+    card.className = 'craft-card';
+    
+    // Базовые проверки
+    let canBuy = dust >= item.cost;
+    
+    // Проверки для всех камней (включая 10 каждого для Сапфиро-Рубиновой звезды)
+    if (item.costMythic && inventory['mythic'] < item.costMythic) canBuy = false;
+    if (item.costRainbow && inventory['rainbow'] < item.costRainbow) canBuy = false;
+    if (item.costSpace && inventory['space'] < item.costSpace) canBuy = false;
+    if (item.costInfinity && inventory['infinity'] < item.costInfinity) canBuy = false;
+    if (item.costCommon && inventory['common'] < item.costCommon) canBuy = false;
+    if (item.costUncommon && inventory['uncommon'] < item.costUncommon) canBuy = false;
+    if (item.costRare && inventory['rare'] < item.costRare) canBuy = false;
+    if (item.costEpic && inventory['epic'] < item.costEpic) canBuy = false;
+    if (item.costLegendary && inventory['legendary'] < item.costLegendary) canBuy = false;
+    
+    // Проверка, куплен ли предмет
+    const isOwned = (item.effectKey === 'glasses' && hasGlasses) || (item.effectKey === 'bag' && hasBag) || (item.effectKey === 'luck' && hasLuckCharm) || (item.effectKey === 'room' && hasRoom) || (item.effectKey === 'broken' && hasBrokenCrystal) ||
+                    (item.effectKey === 'pickaxe_1' && pickaxeLevel >= 1) ||
+                    (item.effectKey === 'pickaxe_2' && pickaxeLevel >= 2) ||
+                    (item.effectKey === 'pickaxe_3' && pickaxeLevel >= 3);
+    
+    let canBuyPickaxe = true;
+    if (item.effectKey === 'pickaxe_2' && pickaxeLevel < 1) canBuyPickaxe = false;
+    if (item.effectKey === 'pickaxe_3' && pickaxeLevel < 2) canBuyPickaxe = false;
+
+    // Формируем строку стоимости
+    let costHTML = '';
+    if (item.cost > 0) costHTML += `${getDustIconHTML()} ${item.cost} `;
+    if (item.costCommon) costHTML += `${item.costCommon} ⚪ `;
+    if (item.costUncommon) costHTML += `${item.costUncommon} 🟢 `;
+    if (item.costRare) costHTML += `${item.costRare} 🔵 `;
+    if (item.costEpic) costHTML += `${item.costEpic} 🟣 `;
+    if (item.costMythic) costHTML += `${item.costMythic} 🔴 `;
+    if (item.costLegendary) costHTML += `${item.costLegendary} 🟡 `;
+    if (item.costSpace) costHTML += `${item.costSpace} 🌌 `;
+    if (item.costRainbow) costHTML += `${item.costRainbow} 🌈 `;
+    if (item.costInfinity) costHTML += `${item.costInfinity} ♾️`;
+
+    if (isOwned) {
+      card.innerHTML = `
+        <div class="craft-info">
+          <div class="craft-icon">${getCraftIcon(item)}</div>
+          <div class="craft-name">${item.name}</div>
+        </div>
+        <button class="craft-buy-btn" disabled>Куплено</button>
+      `;
+    } else if (!canBuyPickaxe) {
+        card.innerHTML = `
+        <div class="craft-info">
+          <div class="craft-icon">${getCraftIcon(item)}</div>
+          <div class="craft-name">${item.name}<br><span style="font-size:10px; color:#888;">Требуется пред. уровень</span></div>
+        </div>
+        <button class="craft-buy-btn" disabled>Закрыто</button>
+      `;
+    } else {
+      card.innerHTML = `
+        <div class="craft-info">
+          <div class="craft-icon">${getCraftIcon(item)}</div>
+          <div class="craft-name">
+            ${item.name}
+            <div style="font-size:11px; color:#aaa; margin-top:4px; line-height:1.4;">${costHTML}</div>
+          </div>
+        </div>
+        <button class="craft-buy-btn" data-id="${item.id}" ${canBuy ? '' : 'disabled'}>
+          ${canBuy ? 'Скрафтить' : 'Не хватает'}
+        </button>
+      `;
+    }
+    craftList.appendChild(card);
+  });
+
+  document.querySelectorAll('.craft-buy-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const itemId = e.target.closest('button').getAttribute('data-id');
+      if(itemId) buyCraftItem(itemId);
+    });
+  });
+}
+
+function buyCraftItem(id) {
+  var item = CRAFT_ITEMS.find(function (craftItem) {
+    return craftItem.id === id;
+  });
+
+  if (!item) return;
+
+  // Не даём повторно покупать постоянный эффект
+  if (item.effectKey === 'gem_finder' && inventory.gem_finder) {
+    showModal('Крафт', 'Искатель самоцветов уже создан!');
+    return;
+  }
+
+  if (dust < (item.cost || 0)) {
+    showModal('Ошибка', 'Не хватает пыли.');
+    return;
+  }
+
+  var resources = [
+    { key: 'common', costKey: 'costCommon', name: 'Обычных камней' },
+    { key: 'uncommon', costKey: 'costUncommon', name: 'Необычных камней' },
+    { key: 'rare', costKey: 'costRare', name: 'Редких камней' },
+    { key: 'epic', costKey: 'costEpic', name: 'Эпических камней' },
+    { key: 'mythic', costKey: 'costMythic', name: 'Мифических камней' },
+    { key: 'legendary', costKey: 'costLegendary', name: 'Легендарных камней' },
+    { key: 'space', costKey: 'costSpace', name: 'Космических камней' },
+    { key: 'rainbow', costKey: 'costRainbow', name: 'Радужных камней' },
+    { key: 'infinity', costKey: 'costInfinity', name: 'Камней Бесконечности' }
+  ];
+
+  var i;
+  var resource;
+  var requiredAmount;
+
+  // Проверяем наличие всех камней до списания ресурсов
+  for (i = 0; i < resources.length; i++) {
+    resource = resources[i];
+    requiredAmount = item[resource.costKey] || 0;
+
+    if (requiredAmount > 0 && (inventory[resource.key] || 0) < requiredAmount) {
+      showModal(
+        'Ошибка',
+        'Не хватает ' + resource.name + ' (нужно ' + requiredAmount + ').'
+      );
+      return;
+    }
+  }
+
+  // Списываем ресурсы
+  dust -= item.cost || 0;
+
+  for (i = 0; i < resources.length; i++) {
+    resource = resources[i];
+    requiredAmount = item[resource.costKey] || 0;
+
+    if (requiredAmount > 0) {
+      inventory[resource.key] -= requiredAmount;
+    }
+  }
+
+  // Выдаём предмет
+  if (item.effectKey === 'sr_star') {
+    inventory.sr_star = (inventory.sr_star || 0) + 1;
+
+    if (!srStarSceneDone) {
+      startSrScene();
+    } else {
+      showModal('Крафт', 'Вы создали Сапфиро-Рубиновую звезду!');
+    }
+  } else if (item.effectKey === 'gem_finder') {
+    inventory.gem_finder = 1;
+    showModal(
+      'Крафт',
+      'Вы создали Искатель самоцветов!'
+    );
+  } else if (item.effectKey === 'glasses') {
+    hasGlasses = true;
+    showModal('Покупка', 'Вы купили Кристальные очки!');
+  } else if (item.effectKey === 'bag') {
+    hasBag = true;
+    showModal('Покупка', 'Вы купили Мешок пыли!');
+  } else if (item.effectKey === 'luck') {
+    hasLuckCharm = true;
+    showModal('Покупка', 'Талисман удачи активирован!');
+  } else if (item.effectKey === 'room') {
+    hasRoom = true;
+    menuRoomBtn.style.display = 'block';
+    showModal('Покупка', 'Вы сделали подарок Сапфире!');
+  } else if (item.effectKey === 'broken') {
+    hasBrokenCrystal = true;
+    showModal('Покупка', 'Разбитый кристалл собран!');
+  } else if (item.effectKey.indexOf('pickaxe_') === 0) {
+    pickaxeLevel = parseInt(item.effectKey.split('_')[1], 10);
+    baseCooldown = 2000 - pickaxeLevel * 300;
+
+    if (baseCooldown < 1000) {
+      baseCooldown = 1000;
+    }
+
+    showModal('Покупка', 'Вы улучшили кирку!');
+  }
+
+  saveToLocal();
+  updateDustUI();
+  renderCraft();
+}
+
+function renderCases() {
+  caseList.innerHTML = '';
+  CASES.forEach(c => {
+    const card = document.createElement('div'); card.className = 'case-card';
+    let canBuy = dust >= c.costDust;
+    if (c.costCommon && inventory['common'] < c.costCommon) canBuy = false;
+    if (c.costUncommon && inventory['uncommon'] < c.costUncommon) canBuy = false;
+    if (c.costEpic && inventory['epic'] < c.costEpic) canBuy = false;
+    if (c.costMythic && inventory['mythic'] < c.costMythic) canBuy = false;
+    if (c.costLegendary && inventory['legendary'] < c.costLegendary) canBuy = false;
+    if (c.costSpace && inventory['space'] < c.costSpace) canBuy = false;
+    if (c.costRainbow && inventory['rainbow'] < c.costRainbow) canBuy = false;
+    let costHTML = '';
+    if (c.costDust > 0) costHTML += `${getDustIconHTML()} ${c.costDust} `;
+    if (c.costCommon) costHTML += `${getStoneIconHTML('common')} ${c.costCommon} `;
+    if (c.costUncommon) costHTML += `${getStoneIconHTML('uncommon')} ${c.costUncommon} `;
+    if (c.costEpic) costHTML += `${getStoneIconHTML('epic')} ${c.costEpic} `;
+    if (c.costMythic) costHTML += `${getStoneIconHTML('mythic')} ${c.costMythic} `;
+    if (c.costLegendary) costHTML += `${getStoneIconHTML('legendary')} ${c.costLegendary} `;
+  if (c.costSpace) costHTML += `🌌 ${c.costSpace} `;
+    if (c.costRainbow) costHTML += `🌈 ${c.costRainbow} `;
+      let iconHTML = c.emoji; if (PRELOADED_IMAGES[c.id]) iconHTML = `<img src="${PRELOADED_IMAGES[c.id].src}">`;
+    card.innerHTML = `<div class="case-info"><div class="case-icon">${iconHTML}</div><div class="case-text"><div class="case-name">${c.name}</div><div class="case-cost">${costHTML || 'Бесплатно'}</div></div></div><div class="case-actions"><button class="case-info-btn" data-id="${c.id}">ⓘ</button><button class="case-buy-btn" data-id="${c.id}" ${canBuy ? '' : 'disabled'}>Открыть</button></div>`;
+    const buyBtn = card.querySelector('.case-buy-btn'); buyBtn.addEventListener('click', () => { if (canBuy) startCaseSequence(c.id); });
+    const infoBtn = card.querySelector('.case-info-btn'); infoBtn.addEventListener('click', () => { let infoText = ''; c.drops.forEach(d => { const rar = RARITIES.find(r => r.id === d.rarityId); infoText += `${d.chance}% — ${rar.name} x${d.amount}\n`; }); showModal('Шансы кейса', infoText); });
+    caseList.appendChild(card);
+  });
+}
+
+function startCaseSequence(caseId) {
+  const c = CASES.find(x => x.id === caseId); if (!c || dust < c.costDust) return;
+  currentCase = c; caseRefunded = false; dust -= c.costDust;
+  if (c.costCommon) inventory['common'] -= c.costCommon; if (c.costUncommon) inventory['uncommon'] -= c.costUncommon;
+  if (c.costEpic) inventory['epic'] -= c.costEpic; if (c.costMythic) inventory['mythic'] -= c.costMythic; if (c.costLegendary) inventory['legendary'] -= c.costLegendary;
+  if (c.costSpace) inventory['space'] -= c.costSpace; if (c.costRainbow) inventory['rainbow'] -= c.costRainbow;
+  saveToLocal(); updateDustUI();
+  const overlay = document.getElementById('caseOpenOverlay'); const roulette = document.getElementById('rouletteWrapper'); const openBtn = document.getElementById('caseOpenBtn'); const backBtn = document.getElementById('caseBackBtn'); const resultText = document.getElementById('caseResult');
+  overlay.classList.remove('dark'); overlay.classList.add('open'); roulette.classList.remove('visible'); openBtn.classList.remove('visible'); backBtn.classList.remove('visible'); resultText.classList.remove('show'); resultText.textContent = '';
+  setTimeout(() => overlay.classList.add('dark'), 50); setTimeout(() => roulette.classList.add('visible'), 550); setTimeout(() => openBtn.classList.add('visible'), 750); setTimeout(() => backBtn.classList.add('visible'), 1050);
+}
+
+document.getElementById('caseOpenBtn').addEventListener('click', () => {
+  const overlay = document.getElementById('caseOpenOverlay'); const openBtn = document.getElementById('caseOpenBtn'); const backBtn = document.getElementById('caseBackBtn'); const track = document.getElementById('rouletteTrack'); const resultText = document.getElementById('caseResult');
+  openBtn.classList.remove('visible'); backBtn.classList.remove('visible'); whiteFlash.classList.add('active'); setTimeout(() => whiteFlash.classList.remove('active'), 50);
+  const c = currentCase; if (!c) return; track.innerHTML = ''; track.style.transition = 'none'; track.style.transform = 'translateX(0)';
+  const ITEMS_COUNT = 50; const WIN_INDEX = 45; const winDrop = rollDrop(c.drops);
+  for (let i = 0; i < ITEMS_COUNT; i++) { const itemDiv = document.createElement('div'); itemDiv.className = 'roulette-item'; let dropToShow = i === WIN_INDEX ? winDrop : rollDrop(c.drops); const rar = RARITIES.find(r => r.id === dropToShow.rarityId); if (rar) itemDiv.appendChild(getCrystalNode(rar)); track.appendChild(itemDiv); }
+  const ITEM_WIDTH = 100; const WRAPPER_WIDTH = 350; const offset = (WIN_INDEX * ITEM_WIDTH) - (WRAPPER_WIDTH / 2) + (ITEM_WIDTH / 2);
+  setTimeout(() => {
+    track.style.transition = 'transform 4s cubic-bezier(0.1, 0.8, 0.2, 1)'; track.style.transform = `translateX(-${offset}px)`;
+    const particleInterval = setInterval(spawnWhiteParticles, 100);
+    setTimeout(() => {
+      clearInterval(particleInterval);
+      if (winDrop.rarityId) { inventory[winDrop.rarityId] += winDrop.amount; resultText.textContent = `Выпало: ${RARITIES.find(r => r.id === winDrop.rarityId).name} x${winDrop.amount}!`; resultText.style.color = '#ffd700'; }
+      saveToLocal(); updateDustUI(); resultText.classList.add('show'); document.body.classList.add('shake-screen'); setTimeout(() => document.body.classList.remove('shake-screen'), 500);
+      whiteFlash.classList.add('active'); setTimeout(() => whiteFlash.classList.remove('active'), 100);
+      setTimeout(() => { overlay.classList.remove('open'); overlay.classList.remove('dark'); renderCases(); }, 2500);
+    }, 4000);
+  }, 50);
+});
+
+document.getElementById('caseBackBtn').addEventListener('click', () => {
+  const overlay = document.getElementById('caseOpenOverlay'); const roulette = document.getElementById('rouletteWrapper'); const openBtn = document.getElementById('caseOpenBtn'); const backBtn = document.getElementById('caseBackBtn');
+  if (!caseRefunded && currentCase) { dust += currentCase.costDust; if (currentCase.costCommon) inventory['common'] += currentCase.costCommon; if (currentCase.costUncommon) inventory['uncommon'] += currentCase.costUncommon; if (currentCase.costEpic) inventory['epic'] += currentCase.costEpic; if (currentCase.costMythic) inventory['mythic'] += currentCase.costMythic; if (currentCase.costLegendary) inventory['legendary'] += currentCase.costLegendary; if (currentCase.costSpace) inventory['space'] += currentCase.costSpace; if (currentCase.costRainbow) inventory['rainbow'] += currentCase.costRainbow; caseRefunded = true; saveToLocal(); updateDustUI(); }
+  roulette.classList.remove('visible'); openBtn.classList.remove('visible'); backBtn.classList.remove('visible');
+  setTimeout(() => { overlay.classList.remove('open'); overlay.classList.remove('dark'); renderCases(); }, 300);
+});
+
+function rollDrop(drops) {
+  const total = drops.reduce((s, d) => s + d.chance, 0); let rand = Math.random() * total;
+  for (const d of drops) { rand -= d.chance; if (rand <= 0) return d; } return drops[0];
+}
+
+function spawnWhiteParticles() {
+  for (let i = 0; i < 5; i++) {
+    const p = document.createElement('div'); p.className = 'white-particle';
+    const isTop = Math.random() > 0.5; const startX = Math.random() * window.innerWidth; const startY = isTop ? -10 : window.innerHeight + 10;
+    p.style.left = startX + 'px'; p.style.top = startY + 'px'; document.body.appendChild(p);
+    p.animate([ { transform: 'translate(0, 0) scale(1)', opacity: 1 }, { transform: `translate(${(window.innerWidth/2 - startX) * 0.5}px, ${(window.innerHeight/2 - startY) * 0.5}px) scale(0)`, opacity: 0 } ], { duration: 800 + Math.random() * 400, easing: 'cubic-bezier(0.1, 0.8, 0.3, 1)' }).onfinish = () => p.remove();
+  }
+}
+
+function rollRarity() {
+  const droppable = RARITIES.filter(r => r.chance > 0);
+  const now = Date.now();
+
+  const finalChances = droppable.map(r => {
+    let chance = r.chance;
+
+    const rare = [
+      'epic',
+      'mythic',
+      'legendary',
+      'space',
+      'rainbow',
+      'infinity'
+    ].includes(r.id);
+
+    const cosmic = ['space', 'rainbow', 'infinity'].includes(r.id);
+
+    if (hasLuckCharm && rare) chance *= 1.15;
+
+    if (
+      sapphiraSleepingBuff &&
+      ['epic', 'mythic', 'legendary'].includes(r.id)
+    ) {
+      chance *= 1.2;
+    }
+
+    let sum = 0;
+
+    if (rare && activeBuffs.potion && now < activeBuffs.potion) sum += 5;
+    if (rare && activeBuffs.tea && now < activeBuffs.tea) sum += 10;
+    if (cosmic && activeBuffs.burger && now < activeBuffs.burger) sum += 2;
+
+    if (sum > 0) chance *= sum;
+
+    return chance;
+  });
+
+  const total = finalChances.reduce((sum, chance) => sum + chance, 0);
+  let rand = Math.random() * total;
+
+  for (let i = 0; i < droppable.length; i++) {
+    rand -= finalChances[i];
+
+    if (rand <= 0) {
+      return droppable[i];
+    }
+  }
+
+  return droppable[0];
+}
+
+function showCrystal(rarity) {
+  crystalDisplay.classList.remove('show');
+  rarityLabel.classList.remove('show');
+  crystalDisplay.innerHTML = '';
+
+  // 👇 Проверяем, активно ли зелье 👇
+  let displayRarity = rarity;
+  if (activeBuffs && activeBuffs.potion && Date.now() < activeBuffs.potion) {
+    // Если зелье активно, показываем Бесконечность, но в инвентарь падает то, что выпало на самом деле
+    displayRarity = RARITIES.find(r => r.id === 'infinity'); 
+  }
+  // 👆 --------------------------- 👆
+
+  crystalDisplay.appendChild(getCrystalNode(displayRarity));
+
+  setTimeout(() => {
+    crystalDisplay.classList.add('show');
+    // И подпись тоже меняем на Бесконечность
+    rarityLabel.textContent = displayRarity.name; 
+    rarityLabel.classList.add('show');
+    
+    // Эффекты оставляем от настоящего камня (чтобы было видно, что выпало что-то редкое)
+    if (rarity.effect === 'particles') spawnParticles();
+    else if (rarity.effect === 'flash') triggerFlash();
+    else if (rarity.effect === 'rainbow') triggerRainbow();
+    else if (rarity.effect === 'infinity') triggerInfinity();
+  }, 50);
+}
+
+function spawnParticles() {
+  const rect = crystalDisplay.getBoundingClientRect(); const stageRect = stage.getBoundingClientRect(); const cx = rect.left - stageRect.left + rect.width / 2; const cy = rect.top - stageRect.top + rect.height / 2;
+  for (let i = 0; i < 40; i++) {
+    const p = document.createElement('div'); p.className = 'particle'; const angle = Math.random() * Math.PI * 2; const dist = 60 + Math.random() * 100; const dx = Math.cos(angle) * dist; const dy = Math.sin(angle) * dist;
+    p.style.left = cx + 'px'; p.style.top = cy + 'px'; stage.appendChild(p);
+    p.animate([ { transform: 'translate(-50%, -50%) scale(1)', opacity: 1 }, { transform: `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px)) scale(0)`, opacity: 0 } ], { duration: 900 + Math.random() * 200, easing: 'cubic-bezier(0.1, 0.8, 0.3, 1)' }).onfinish = () => p.remove();
+  }
+}
+
+function triggerFlash() { if (safeMode) return; flashOverlay.classList.add('active'); setTimeout(() => flashOverlay.classList.remove('active'), 250); }
+let rainbowTimeout = null;
+function triggerRainbow() { rainbowBg.classList.add('active'); rainbowBg.style.opacity = safeMode ? '0.08' : '0.2'; if (rainbowTimeout) clearTimeout(rainbowTimeout); rainbowTimeout = setTimeout(() => { rainbowBg.classList.remove('active'); }, 4000); }
+function triggerInfinity() { if (safeMode) return; infinityOverlay.classList.add('active'); setTimeout(() => { infinityOverlay.classList.remove('active'); }, 1000); }
+
+// === БАФФЫ ===
+let activeBuffs = {}; // { burger: endTime }
+
+function useBurger() {
+  if (itemInventory.burger <= 0) return;
+  itemInventory.burger--;
+  
+  const duration = 10 * 60 * 1000; // 10 минут
+  const endTime = Date.now() + duration;
+  
+  // Если бафф уже есть, продлеваем время
+  if (activeBuffs.burger) {
+    activeBuffs.burger += duration;
+  } else {
+    activeBuffs.burger = endTime;
+  }
+  
+  saveToLocal(); updateDustUI(); renderInventory(); updateBuffsUI();
+  showModal('Бафф', 'Призрачный бургер активирован! Удача х2 на 10 минут.');
+}
+
+function useTea() {
+  if (!itemInventory.ruby_tea || itemInventory.ruby_tea <= 0) return;
+  itemInventory.ruby_tea--;
+  const base = (activeBuffs.tea && activeBuffs.tea > Date.now()) ? activeBuffs.tea : Date.now();
+  activeBuffs.tea = base + 60 * 60 * 1000;
+  saveToLocal(); updateDustUI(); renderInventory(); updateBuffsUI();
+  showModal('Чай Рубины', 'Ты выпил чай! Удача x10 на 1 час.');
+}
+
+function usePotion() {
+  if (itemInventory.strange_potion <= 0) return;
+  itemInventory.strange_potion--;
+  
+  const duration = 20 * 60 * 1000; // 20 минут
+  const endTime = Date.now() + duration;
+  
+  if (!activeBuffs) activeBuffs = {};
+  activeBuffs.potion = endTime; // У зелья нет накопления, просто ставим время
+  
+  saveToLocal(); updateDustUI(); renderInventory(); updateBuffsUI();
+  showModal('Странное зелье', 'Ты выпил зелье! Шансы х5 на 20 минут!');
+}
+
+function updateBuffsUI() {
+  const container = document.getElementById('activeBuffs');
+  if (!container) return;
+  container.innerHTML = '';
+  const now = Date.now();
+  const cards = {
+    burger: { icon: '🍔', color: '#ef4444', title: 'Удача x2' },
+    potion: { icon: '🧪', color: '#a855f7', title: 'Шансы x5' },
+    tea:    { icon: '🍵', color: '#f59e0b', title: 'Удача x10' }
+  };
+  for (const key in activeBuffs) {
+    if (activeBuffs[key] > now) {
+      const c = cards[key];
+      if (!c) continue;
+      const timeLeft = Math.ceil((activeBuffs[key] - now) / 1000);
+      const mins = Math.floor(timeLeft / 60);
+      const secs = timeLeft % 60;
+      container.innerHTML += `<div style="background: rgba(13,13,13,0.9); border: 1px solid ${c.color}; padding: 8px 12px; border-radius: 6px; display: flex; align-items: center; gap: 10px; font-size: 12px; color: #fff; box-shadow: 0 4px 10px rgba(0,0,0,0.5);"><span style="font-size: 24px;">${c.icon}</span><div><div style="color: ${c.color}; font-weight: bold;">${c.title}</div><div>${mins}:${secs.toString().padStart(2, '0')}</div></div></div>`;
+    } else {
+      delete activeBuffs[key];
+    }
+  }
+}
+setInterval(updateBuffsUI, 1000);
+
+function dig() {
+  if (sapphiraState === 'tutorial') {
+    interruptTutorial();
+    return;
+  }
+
+  if (Date.now() < cooldownEnd) return;
+  
+  if (!safeMode) {
+    whiteFlash.classList.add('active');
+    setTimeout(() => { whiteFlash.classList.remove('active'); }, 50);
+  }
+  
+// === ЛОГИКА ВЫПАДЕНИЯ КРИСТАЛЛОВ ===
+let digsCount = 1;
+
+if (hasBrokenCrystal) {
+  digsCount = 2;
+}
+
+const droppedRarities = [];
+const droppedGems = [];
+
+for (let i = 0; i < digsCount; i++) {
+  const rarity = rollRarity();
+
+  inventory[rarity.id] = (inventory[rarity.id] || 0) + 1;
+  totalDigs++;
+  totalStones++;
+  droppedRarities.push(rarity);
+
+  let baseDust = 1;
+
+  if (hasBag && Math.random() < 0.3) {
+    baseDust += 2;
+  }
+
+  if (hasGlasses) {
+    const dustBonus = {
+      common: 2,
+      uncommon: 4,
+      rare: 8,
+      epic: 16,
+      mythic: 32,
+      legendary: 64,
+      space: 256,
+      rainbow: 1024,
+      infinity: 5000
+    };
+
+    baseDust += dustBonus[rarity.id] || 0;
+  }
+
+  dust += baseDust;
+}
+
+// === ДОПОЛНИТЕЛЬНАЯ НАХОДКА ОТ ИСКАТЕЛЯ САМОЦВЕТОВ ===
+// Проверяем выпадение один раз за добычу, независимо от количества кристаллов
+if (inventory.gem_finder) {
+  const roll = Math.random() * 100;
+  let gemId = null;
+
+  if (roll >= 40 && roll < 70) {
+    gemId = 'copper';
+  } else if (roll >= 70 && roll < 90) {
+    gemId = 'silver';
+  } else if (roll >= 90) {
+    gemId = 'gold';
+  }
+
+  if (gemId) {
+    inventory[gemId] = (inventory[gemId] || 0) + 1;
+    droppedGems.push(gemId);
+  }
+}
+
+// === ПОДГОТОВКА ОТОБРАЖАЕМЫХ КРИСТАЛЛОВ ===
+const potionOn =
+  activeBuffs &&
+  activeBuffs.potion &&
+  Date.now() < activeBuffs.potion;
+
+const infinityRarity = RARITIES.find(function (rarity) {
+  return rarity.id === 'infinity';
+});
+
+const shownRarities =
+  potionOn && infinityRarity
+    ? droppedRarities.map(function () {
+        return infinityRarity;
+      })
+    : droppedRarities.slice();
+
+// === ОДНА ОТРИСОВКА: САМОЦВЕТЫ СВЕРХУ, КРИСТАЛЛЫ РЯДОМ ===
+crystalDisplay.innerHTML = '';
+crystalDisplay.style.display = 'flex';
+crystalDisplay.style.flexDirection = 'column';
+crystalDisplay.style.alignItems = 'center';
+crystalDisplay.style.gap = '8px';
+
+if (droppedGems.length > 0) {
+  const gemRow = document.createElement('div');
+
+  gemRow.style.display = 'flex';
+  gemRow.style.justifyContent = 'center';
+  gemRow.style.gap = '6px';
+
+  droppedGems.forEach(function (gemId) {
+    gemRow.appendChild(getGemNode(gemId));
+  });
+
+  crystalDisplay.appendChild(gemRow);
+}
+
+if (shownRarities.length > 0) {
+  const crystalRow = document.createElement('div');
+
+  crystalRow.style.display = 'flex';
+  crystalRow.style.alignItems = 'center';
+  crystalRow.style.justifyContent = 'center';
+  crystalRow.style.gap = '12px';
+
+  shownRarities.forEach(function (crystal) {
+    crystalRow.appendChild(getCrystalNode(crystal));
+  });
+
+  crystalDisplay.appendChild(crystalRow);
+}
+
+// === ПОДПИСЬ И ЗВУК ===
+const labelParts = [];
+
+if (shownRarities.length > 0) {
+  const firstRarity = shownRarities[0];
+  const allSameRarity = shownRarities.every(function (rarity) {
+    return rarity.id === firstRarity.id;
+  });
+
+  if (shownRarities.length > 1 && allSameRarity) {
+    labelParts.push(
+      firstRarity.name + ' x' + shownRarities.length
+    );
+  } else {
+    labelParts.push(
+      shownRarities
+        .map(function (rarity) {
+          return rarity.name;
+        })
+        .join(' + ')
+    );
+  }
+
+  const bestRarityForSound = droppedRarities.reduce(function (
+    best,
+    current
+  ) {
+    return RARITIES.indexOf(current) > RARITIES.indexOf(best)
+      ? current
+      : best;
+  });
+
+  playRaritySound(bestRarityForSound);
+}
+
+if (droppedGems.length > 0) {
+  const gemNames = droppedGems
+    .map(function (gemId) {
+      return GEMS[gemId] ? GEMS[gemId].name : gemId;
+    })
+    .join(', ');
+
+  labelParts.push(gemNames);
+}
+
+rarityLabel.textContent =
+  labelParts.length > 0 ? labelParts.join(' + ') : 'Ничего не найдено';
+
+// === ПОЯВЛЕНИЕ И ЭФФЕКТЫ ===
+setTimeout(function () {
+  crystalDisplay.classList.add('show');
+  rarityLabel.classList.add('show');
+
+  if (droppedRarities.length === 0) {
+    return;
+  }
+
+  const bestRarity = droppedRarities.reduce(function (best, current) {
+    return RARITIES.indexOf(current) > RARITIES.indexOf(best)
+      ? current
+      : best;
+  });
+
+  if (bestRarity.effect === 'particles') {
+    spawnParticles();
+  } else if (bestRarity.effect === 'flash') {
+    triggerFlash();
+  } else if (bestRarity.effect === 'rainbow') {
+    triggerRainbow();
+  } else if (bestRarity.effect === 'infinity') {
+    triggerInfinity();
+  }
+}, 50);
+
+// === СОХРАНЕНИЕ И ПЕРЕЗАРЯДКА ===
+saveToLocal();
+updateDustUI();
+
+cooldownEnd = Date.now() + baseCooldown;
+digBtn.disabled = true;
+cdBar.style.width = '100%';
+
+cooldownTimer = setInterval(function () {
+  const left = cooldownEnd - Date.now();
+
+  if (left <= 0) {
+    clearInterval(cooldownTimer);
+    cdBar.style.width = '0%';
+    digBtn.disabled = false;
+    cooldownEnd = 0;
+  } else {
+    cdBar.style.width = (left / baseCooldown) * 100 + '%';
+  }
+}, 50);
+}
+
+let currentTab = 'all';
+function renderInventory() {
+  invGrid.innerHTML = '';
+
+  // Вкладка «Вещи»
+  if (currentTab === 'items') {
+    let hasItems = false;
+
+    const items = [
+      {
+        key: 'burger',
+        name: 'Призрачный бургер',
+        icon: '🍔',
+        action: 'useBurger()',
+        button: 'Использовать'
+      },
+      {
+        key: 'strange_potion',
+        name: 'Странное зелье',
+        icon: '🧪',
+        action: 'usePotion()',
+        button: 'Выпить'
+      },
+      {
+        key: 'ruby_tea',
+        name: 'Чай Рубины',
+        icon: '🍵',
+        action: 'useTea()',
+        button: 'Выпить'
+      }
+    ];
+
+    items.forEach(item => {
+      const count = itemInventory[item.key] || 0;
+      if (count <= 0) return;
+
+      hasItems = true;
+
+      const div = document.createElement('div');
+      div.className = 'inv-item';
+      div.innerHTML = `
+        <div class="icon" style="font-size:32px;">${item.icon}</div>
+        <div class="info">
+          <div class="name">${item.name}</div>
+          <div class="count">×${count}</div>
+        </div>
+        <button class="craft-buy-btn" onclick="${item.action}">
+          ${item.button}
+        </button>
+      `;
+
+      invGrid.appendChild(div);
+    });
+
+    if (!hasItems) {
+      invGrid.innerHTML =
+        '<div style="color:#888; text-align:center; grid-column: span 2;' +
+        ' margin-top:20px;">Тут пусто. Купи вещи у Рубины.</div>';
+    }
+
+    return;
+  }
+
+// Вкладка «Самоцветы»
+if (currentTab === 'gems') {
+  const gems = [
+    {
+      id: 'copper',
+      name: 'Медный самоцвет',
+      img: 'textures/copper.png',
+      emoji: '🟤'
+    },
+    {
+      id: 'silver',
+      name: 'Серебряный самоцвет',
+      img: 'textures/silver.png',
+      emoji: '⚪'
+    },
+    {
+      id: 'gold',
+      name: 'Золотой самоцвет',
+      img: 'textures/gold.png',
+      emoji: '🟡'
+    }
+  ];
+
+  invGrid.innerHTML = '';
+
+  gems.forEach(function (gem) {
+    const count = inventory[gem.id] || 0;
+
+    const card = document.createElement('div');
+    card.className = 'inv-item' + (count === 0 ? ' empty' : '');
+
+    const icon = document.createElement('div');
+    icon.className = 'icon';
+
+    const img = document.createElement('img');
+    img.src = gem.img;
+    img.alt = gem.name;
+    img.onerror = function () {
+      icon.textContent = gem.emoji;
+    };
+
+    icon.appendChild(img);
+
+    const info = document.createElement('div');
+    info.className = 'info';
+
+    const name = document.createElement('div');
+    name.className = 'name';
+    name.textContent = gem.name;
+
+    const amount = document.createElement('div');
+    amount.className = 'count';
+    amount.textContent = count;
+
+    info.appendChild(name);
+    info.appendChild(amount);
+    card.appendChild(icon);
+    card.appendChild(info);
+    invGrid.appendChild(card);
+  });
+
+  return;
+}
+
+  // Вкладки с обычными и крафтовыми кристаллами
+  RARITIES.forEach(rarity => {
+    if (
+      currentTab !== 'all' &&
+      rarity.category !== currentTab
+    ) {
+      return;
+    }
+
+    const count = inventory[rarity.id] || 0;
+    const div = document.createElement('div');
+    div.className = 'inv-item' + (count === 0 ? ' empty' : '');
+
+    const icon = document.createElement('div');
+    icon.className = 'icon';
+    icon.appendChild(getCrystalNode(rarity));
+
+    const info = document.createElement('div');
+    info.className = 'info';
+    info.innerHTML =
+      `<div class="name">${rarity.name}</div>` +
+      `<div class="count">×${count}</div>`;
+
+    div.appendChild(icon);
+    div.appendChild(info);
+    invGrid.appendChild(div);
+  });
+}
+
+const SHOP_EXTRA_SLOTS_KEY = "cry_shop_extra_slots";
+const SHOP_BASE_SLOTS = 4;
+const SHOP_EXTRA_SLOTS = 4;
+
+function getShopSlotCount() {
+  const extraSlotsUnlocked =
+    localStorage.getItem(SHOP_EXTRA_SLOTS_KEY) === "true";
+
+  return SHOP_BASE_SLOTS + (extraSlotsUnlocked ? SHOP_EXTRA_SLOTS : 0);
+}
+
+function createShopItem(index, now = Date.now()) {
+  const base =
+    SHOP_ITEMS_POOL[Math.floor(Math.random() * SHOP_ITEMS_POOL.length)];
+
+  const item = {
+    ...base,
+    uniqueId: "shop_" + now + "_" + index,
+    price:
+      Math.floor(Math.random() * (base.maxPrice - base.minPrice + 1)) +
+      base.minPrice,
+    sold: false,
+  };
+
+  if (base.effect === "random_crystal") {
+    const crystalPool = ["common", "uncommon", "rare", "epic"];
+    const rid = crystalPool[Math.floor(Math.random() * crystalPool.length)];
+    const rarity = RARITIES.find((r) => r.id === rid);
+
+    item.crystalRarity = rid;
+    item.name = "Кристалл: " + rarity.name;
+    item.img = rarity.img;
+    item.emoji = rarity.emoji;
+  }
+
+  return item;
+}
+
+document.querySelectorAll('.inv-tab').forEach(tab => {
+  tab.addEventListener('click', (e) => {
+    document.querySelectorAll('.inv-tab').forEach(t => t.classList.remove('active'));
+    e.target.classList.add('active'); currentTab = e.target.getAttribute('data-cat'); renderInventory();
+  });
+});
+
+digBtn.addEventListener('click', dig);
+
+document.getElementById('menuInv').addEventListener('click', () => { renderInventory(); document.getElementById('inventory').classList.add('open'); dropdownMenu.classList.remove('open'); hideSapphira(); });
+document.getElementById('closeInv').addEventListener('click', () => { document.getElementById('inventory').classList.remove('open'); if (isTutorialDone && sapphiraState === 'hidden') scheduleRandomDialog(); });
+document.getElementById('menuCraft').addEventListener('click', () => { renderCraft(); document.getElementById('craftMenu').classList.add('open'); dropdownMenu.classList.remove('open'); hideSapphira(); });
+document.getElementById('closeCraft').addEventListener('click', () => { document.getElementById('craftMenu').classList.remove('open'); if (isTutorialDone && sapphiraState === 'hidden') scheduleRandomDialog(); });
+document.getElementById('menuCase').addEventListener('click', () => { renderCases(); document.getElementById('caseMenu').classList.add('open'); dropdownMenu.classList.remove('open'); hideSapphira(); });
+document.getElementById('closeCase').addEventListener('click', () => { document.getElementById('caseMenu').classList.remove('open'); if (isTutorialDone && sapphiraState === 'hidden') scheduleRandomDialog(); });
+document.getElementById('menuProfile').addEventListener('click', () => { updateProfileMenu(); document.getElementById('profileMenu').classList.add('open'); dropdownMenu.classList.remove('open'); hideSapphira(); });
+document.getElementById('closeProfile').addEventListener('click', () => { document.getElementById('profileMenu').classList.remove('open'); if (isTutorialDone && sapphiraState === 'hidden') scheduleRandomDialog(); });
+
+document.getElementById('menuShop').addEventListener('click', () => {
+  initShop(); document.getElementById('shopOverlay').classList.add('open'); dropdownMenu.classList.remove('open'); hideSapphira();
+});
+document.getElementById('closeShop').addEventListener('click', () => { document.getElementById('shopOverlay').classList.remove('open'); if (isTutorialDone && sapphiraState === 'hidden') scheduleRandomDialog(); });
+
+document.getElementById('menuRoom').addEventListener('click', () => {
+  if (!hasRoom) return;
+  document.getElementById('sapphiraRoomOverlay').classList.add('open'); dropdownMenu.classList.remove('open'); hideSapphira();
+  const now = Date.now(); const cooldown = 12 * 60 * 60 * 1000; const canClaim = (now - lastFreeCaseTime) >= cooldown;
+  if (canClaim) { dailyRewardBtn.disabled = false; dailyRewardBtn.textContent = "Забрать Мифический кейс"; }
+  else { dailyRewardBtn.disabled = true; const left = cooldown - (now - lastFreeCaseTime); const h = Math.floor(left / (1000*60*60)); const m = Math.floor((left % (1000*60*60)) / (1000*60)); dailyRewardBtn.textContent = `Ждать: ${h}ч ${m}м`; }
+});
+document.getElementById('closeRoom').addEventListener('click', () => { document.getElementById('sapphiraRoomOverlay').classList.remove('open'); if (isTutorialDone && sapphiraState === 'hidden') scheduleRandomDialog(); });
+
+dailyRewardBtn.addEventListener('click', () => {
+  const now = Date.now(); const cooldown = 12 * 60 * 60 * 1000;
+  if ((now - lastFreeCaseTime) >= cooldown) {
+    lastFreeCaseTime = now; const reward = Math.floor(Math.random() * 100) + 50; dust += reward;
+    saveToLocal(); updateDustUI(); showModal('Награда', `Вы получили Мифический кейс (в разработке) и ${reward} пыли!`);
+    dailyRewardBtn.disabled = true; dailyRewardBtn.textContent = "Ждать: 12ч 0м";
+  }
+});
+
+    function playRaritySound(rarity) {
+  const soundIds = {
+    legendary: 'soundLegendary',
+    space: 'soundCosmic',
+    rainbow: 'soundRainbow',
+    infinity: 'soundInfinite'
+  };
+
+  const soundId = soundIds[rarity.id];
+  if (!soundId) return;
+
+  const sound = document.getElementById(soundId);
+
+  if (!sound) {
+    showModal('Ошибка звука', 'Не найден аудиоэлемент: ' + soundId);
+    return;
+  }
+
+  sound.currentTime = 0;
+
+  const result = sound.play();
+
+  if (result && typeof result.catch === 'function') {
+    result.catch(function (error) {
+      showModal(
+        'Ошибка звука',
+        'Не удалось запустить ' + sound.src +
+          '\n' + error.name + ': ' + error.message
+      );
+    });
+  }
+}
+
+// === СЦЕНА ЗВЕЗДЫ + МАГАЗИН ===
+let srStarSceneDone =
+  localStorage.getItem('srStarSceneDone') === 'true';
+
+let srSceneRunning = false;
+let srSceneEnding = false;
+  localStorage.getItem('srStarSceneDone') === 'true';
+let lastFreeReroll = 0;
+
+const SR_SCENE = [
+  {
+    who: 'S',
+    pose: 'idle',
+    text: 'О Рубина привет познакомься с моим... Эээ другом да.',
+    time: 5000
+  },
+  {
+    who: 'R',
+    text: 'Ну мы с ним уже знакомы он ко мне в магазин заходил',
+    time: 5000
+  },
+  {
+    who: 'S',
+    pose: 'angry',
+    text: 'ТЫ МНЕ ИЗ..',
+    time: 2000
+  },
+  {
+    who: 'S',
+    pose: 'idle',
+    text: 'Ой я хотела сказать что вы уже подружились я и не думала',
+    time: 5000
+  },
+  {
+    who: 'R',
+    text: 'Ну вообще то мы не дружим а просто знакомы',
+    time: 5000
+  },
+  {
+    who: 'S',
+    pose: 'think',
+    text: 'Рубина а тебя не волнует что это человек?',
+    time: 4000
+  },
+  {
+    who: 'R',
+    text: 'Нет, кстати а почему он нечего не говорит?',
+    time: 5000
+  },
+  {
+    who: 'S',
+    pose: 'idle',
+    text: 'Я не знаю',
+    time: 3000
+  },
+  {
+    who: 'R',
+    text: 'Слушай а иди ко мне в магазин',
+    time: 5000
+  },
+  {
+    who: 'S',
+    pose: 'angry',
+    text: 'Даже не думай он уже занят',
+    time: 4000
+  },
+  {
+    who: 'R',
+    text: 'Во первых, вы же дружите? Во вторых, у меня для него сюрприз',
+    time: 5000
+  },
+  {
+    who: 'S',
+    pose: 'idle',
+    text: 'Я пошутила, наверное',
+    time: 4000
+  }
+];
+
+(() => {
+  const saved = localStorage.getItem('srStarSceneDone');
+  const expected = saved === 'true';
+
+  console.log('[Проверка сцены звезды]', {
+    переменная: srStarSceneDone,
+    localStorage: saved
+  });
+
+  if (srStarSceneDone !== expected) {
+    console.error('БАГ: переменная и localStorage не совпадают.');
+  } else if (expected) {
+    console.log('Флаг сохранён. Если сцена всё равно запускается — проблема в другом месте вызова.');
+  } else {
+    console.warn('Флаг ещё не сохранён: сцена может запускаться повторно.');
+  }
+})();
+function startSrScene() {
+  if (srStarSceneDone || srSceneRunning) return;
+
+
+
+  // Сразу сохраняем флаг, чтобы сцена не запустилась повторно
+  // после перезагрузки страницы во время кат-сцены.
+  srStarSceneDone = true;
+  srSceneRunning = true;
+  srSceneEnding = false;
+
+  localStorage.setItem('srStarSceneDone', 'true');
+  saveToLocal();
+
+  const scene = document.getElementById('srScene');
+  const bg = document.getElementById('srBg');
+  const sap = document.getElementById('srSapphira');
+  const rub = document.getElementById('srRubina');
+  const text = document.getElementById('srText');
+
+  text.style.opacity = '0';
+  bg.style.opacity = '0';
+  sap.style.opacity = '1';
+  rub.style.opacity = '1';
+
+  sap.style.right = '-400px';
+  rub.style.left = '-400px';
+
+  scene.classList.add('open');
+
+  setTimeout(() => {
+    scene.style.opacity = '1';
+  }, 30);
+
+  setTimeout(() => {
+    bg.style.opacity = '1';
+  }, 1400);
+
+  setTimeout(() => {
+    sap.style.right = '3%';
+    rub.style.left = '3%';
+  }, 2600);
+
+  setTimeout(() => {
+    playSrStep(0);
+  }, 4000);
+}
+
+function playSrStep(i) {
+  if (!srSceneRunning || srSceneEnding) return;
+
+  if (i >= SR_SCENE.length) {
+    endSrScene();
+    return;
+  }
+
+  const step = SR_SCENE[i];
+  const sap = document.getElementById('srSapphira');
+  const rub = document.getElementById('srRubina');
+  const box = document.getElementById('srText');
+  const isSapphira = step.who === 'S';
+
+  if (isSapphira) {
+    sap.style.backgroundImage =
+      `url('textures/sapphira_${step.pose}.png')`;
+  }
+
+  sap.style.opacity = isSapphira ? '1' : '0.6';
+  rub.style.opacity = isSapphira ? '0.6' : '1';
+  box.style.borderColor = isSapphira ? '#38bdf8' : '#ef4444';
+
+  box.innerHTML =
+    `<b style="color:${isSapphira ? '#38bdf8' : '#ef4444'}">` +
+    `${isSapphira ? 'Сапфира' : 'Рубина'}</b><br>${step.text}`;
+
+  box.style.opacity = '1';
+
+  setTimeout(() => {
+    box.style.opacity = '0';
+
+    setTimeout(() => {
+      playSrStep(i + 1);
+    }, 300);
+  }, step.time);
+}
+
+function endSrScene() {
+  if (srSceneEnding) return;
+
+  srSceneEnding = true;
+
+  const scene = document.getElementById('srScene');
+
+  document.getElementById('srSapphira').style.right = '-400px';
+  document.getElementById('srRubina').style.left = '-400px';
+
+  setTimeout(() => {
+    scene.style.opacity = '0';
+  }, 1000);
+
+  setTimeout(() => {
+    scene.classList.remove('open');
+    srSceneRunning = false;
+    srSceneEnding = false;
+
+    srStarSceneDone = true;
+    localStorage.setItem('srStarSceneDone', 'true');
+    saveToLocal();
+
+    showModal(
+      'Сапфиро-Рубиновая звезда',
+      'Звезда создана!\nТеперь в магазине Рубины 10 мест, ' +
+        'а раз в 12 часов можно бесплатно обновить товары.'
+    );
+  }, 2100);
+}
+
+function updateRerollBtn() {
+  const btn = document.getElementById('freeRerollBtn');
+  if (!btn) return;
+  if (!srStarSceneDone) { btn.style.display = 'none'; return; }
+  btn.style.display = 'block';
+  const left = 12 * 60 * 60 * 1000 - (Date.now() - lastFreeReroll);
+  if (left <= 0) { btn.disabled = false; btn.textContent = 'Бесплатно обновить товары'; }
+  else {
+    btn.disabled = true;
+    btn.textContent = `Обновить бесплатно через ${Math.floor(left / 3600000)}ч ${Math.floor((left % 3600000) / 60000)}м`;
+  }
+}
+setInterval(updateRerollBtn, 1000);
+
+document.getElementById('freeRerollBtn').addEventListener('click', () => {
+  if (Date.now() - lastFreeReroll < 12 * 60 * 60 * 1000) return;
+  lastFreeReroll = Date.now();
+  currentShopItems = [];
+  initShop();
+  saveToLocal();
+});
+
+preloadTextures().then(() => {
+  updateSafeModeBtn();
+  if (loadFromLocal()) {
+    updateDustUI(); startScreen.classList.remove('open');
+    if (!isTutorialDone) setTimeout(startTutorial, 1000); else scheduleRandomDialog();
+    scheduleRubinaSleep();
+  } else { startScreen.classList.add('open'); }
+})
+
+</script>
+</body>
+</html>
